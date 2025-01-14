@@ -38,7 +38,6 @@ class UCIEngine:
         # Return the captured output as a list of lines
         return output.strip().split("\n")
 
-
 # Create a single shared instance of the UCI engine
 engine = UCIEngine()
 

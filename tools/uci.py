@@ -210,6 +210,19 @@ def run(sunfish_module, startpos):
                         assert args[8] == "moves"
                         for move in args[9:]:
                             hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
+                # New function : get moves
+                elif args[0] == "getmoves":
+                    # Example: getmoves e2 P
+                    if len(args) < 2:
+                        print("info string getmoves requires a square (and optional piece type)")
+                        continue
+
+                    square = args[1]  # e.g., "e2"
+                    piece_filter = args[2] if len(args) > 2 else None  # e.g., "P"
+
+                    moves = hist[-1].get_legal_moves(square=square, piece_filter=piece_filter)
+                    moves_uci = [render_move(move, white_pov=len(hist) % 2 == 1) for move in moves]
+                    print("info string legal moves:", " ".join(moves_uci))
 
                 elif args[0] == "go":
                     think = 10**6

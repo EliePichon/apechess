@@ -255,6 +255,49 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 score += pst["P"][119 - (j + S)]
         return score
 
+    def get_legal_moves(self, square=None, piece_filter=None):
+        """
+        Get all legal moves for a given square and/or piece type.
+
+        Args:
+        - square (str or int): The square to filter moves from (e.g., 'e2' or 85).
+        - piece_filter (str): Optional. The piece type to filter moves (e.g., 'P', 'N').
+
+        Returns:
+        - List of legal moves in Move format.
+        """
+        # Parse the square if given in algebraic notation
+        if isinstance(square, str):
+            square = parse(square)
+
+        moves = []
+        for move in self.gen_moves():
+            if square is not None and move.i != square:
+                continue  # Skip moves not starting from the specified square
+            if piece_filter is not None and self.board[move.i] != piece_filter:
+                continue  # Skip moves not involving the specified piece
+            # Check legality (king not in check after move)
+            if not self.is_king_in_check(self.move(move)):
+                moves.append(move)
+
+        return moves
+
+    def is_king_in_check(self, position):
+        """
+        Check if the king is under attack in the given position.
+
+        Args:
+        - position: Position object.
+
+        Returns:
+        - True if the king is attacked, False otherwise.
+        """
+        king_square = position.board.index("K")  # Find the king's position
+        for move in position.gen_moves():
+            if move.j == king_square:
+                return True
+        return False
+
 
 ###############################################################################
 # Search logic
