@@ -142,7 +142,7 @@ def run(sunfish_module, startpos):
     global sunfish
     sunfish = sunfish_module
 
-    debug = False
+    debug = True
     hist = [startpos]
     searcher = sunfish.Searcher()
 
