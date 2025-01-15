@@ -4,6 +4,11 @@ import re, time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from functools import partial
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 print = partial(print, flush=True)
 
@@ -65,6 +70,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # we are in "go infinite" since it's simply translated to "go depth 100".
 
     my_pv = pv(searcher, hist[-1], include_scores=False)
+    logger.debug("found bestmove "+ my_pv[0] if my_pv else "(none)")
     print("bestmove", my_pv[0] if my_pv else "(none)")
 
 
@@ -204,14 +210,20 @@ def run(sunfish_module, startpos):
                         hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
                 elif args[:2] == ["position", "fen"]:
+                    logger.debug("received fen postion command")
                     pos = from_fen(*args[2:8])
                     hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
                     if len(args) > 8:
                         assert args[8] == "moves"
                         for move in args[9:]:
                             hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
+                    # Write a confirmation response
+                    print("info string position set successfully")
+
                 # New function : get moves
                 elif args[0] == "getmoves":
+                    logger.debug("received getmoves command")
+
                     # Example: getmoves e2 P
                     if len(args) < 2:
                         print("info string getmoves requires a square (and optional piece type)")
@@ -222,9 +234,11 @@ def run(sunfish_module, startpos):
 
                     moves = hist[-1].get_legal_moves(square=square, piece_filter=piece_filter)
                     moves_uci = [render_move(move, white_pov=len(hist) % 2 == 1) for move in moves]
-                    print("info string legal moves:", " ".join(moves_uci))
+                    logger.debug("legal moves:", " ".join(moves_uci))
+                    print("legal moves:", " ".join(moves_uci))
 
                 elif args[0] == "go":
+                    logger.debug("received go command")
                     think = 10**6
                     max_depth = 100
                     loop = go_loop
