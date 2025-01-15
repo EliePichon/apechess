@@ -144,7 +144,7 @@ def perft(pos, depth, debug=False):
     print("Nodes searched:", total)
 
 
-def run(sunfish_module, startpos):
+def run(sunfish_module, startpos, shared_state=None):
     global sunfish
     sunfish = sunfish_module
 
@@ -152,6 +152,10 @@ def run(sunfish_module, startpos):
     hist = [startpos]
     searcher = sunfish.Searcher()
 
+    # Initialize shared state
+    if shared_state is not None:
+        shared_state["hist"] = hist
+        
     with ThreadPoolExecutor(max_workers=1) as executor:
         # Noop future to get started
         go_future = executor.submit(lambda: None)

@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, resources={r"/uci": {"origins": "http://localhost:8081"}, r"/getmoves": {"origins": "http://localhost:8081"}})
 
+# Shared state to store Sunfish's current history
+shared_state = {}
+
 class BlockingInput:
     def __init__(self):
         self.queue = queue.Queue()
@@ -44,22 +47,33 @@ class SunfishManager:
             sunfish.initial, 0, (True, True), (True, True), 0, 0
         )
 
+        # Shared state for tracking history
+        self.shared_state = {"hist": None}
+
         # Start the UCI loop in a separate thread
         self.thread = threading.Thread(target=self._start_uci_loop, daemon=True)
         self.thread.start()
 
     def _start_uci_loop(self):
-        """Start the Sunfish UCI loop."""
         logger.debug("Starting Sunfish UCI loop")
         sys.stdin = self.input_stream
         sys.stdout = self.output_stream
 
         try:
-            uci.run(sunfish, self.startpos)
+            uci.run(sunfish, self.startpos, self.shared_state)  # Pass shared state
         except Exception as e:
             logger.error(f"UCI loop exited with an error: {e}")
         finally:
             logger.debug("Exited Sunfish UCI loop")
+
+    def get_current_position(self):
+        """
+        Retrieve the current position from the shared state.
+        """
+        hist = self.shared_state.get("hist")
+        if not hist:
+            raise RuntimeError("No history available in the shared state.")
+        return hist[-1]
 
     def send_command(self, command):
         """
@@ -161,6 +175,80 @@ def uci_endpoint():
     except Exception as e:
         logger.error(f"Error processing command: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route("/getmoves", methods=["POST"])
+def get_moves_endpoint():
+    """
+    Get all legal moves for the current position.
+    """
+    data = request.get_json()
+    if not data or "player" not in data:
+        return jsonify({"error": "Missing 'player' field in request"}), 400
+
+    player = data["player"].lower()
+    if player not in ["w", "b"]:
+        return jsonify({"error": "Invalid player. Must be 'w' or 'b'"}), 400
+
+    # Get the current position from the shared state
+    try:
+        position = engine.get_current_position()
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+
+    player_pieces = set("PNBRQK") if player == "w" else set("pnbrqk")
+
+    # Collect all legal moves for the player's pieces
+    moves = {}
+    for i, piece in enumerate(position.board):
+        if piece in player_pieces:
+            legal_moves = position.get_legal_moves(square=i)
+            if legal_moves:
+                square = sunfish.render(i)  # Convert 120-board index to algebraic notation
+                moves[square] = [sunfish.render(move.i) + sunfish.render(move.j) + move.prom.lower() for move in legal_moves]
+
+    return jsonify({"moves": moves})
+
+
+# @app.route("/getmoves", methods=["POST"])
+# def get_moves_endpoint():
+#     """
+#     Get all legal moves for the current position.
+#     Request JSON:
+#       { "player": "w" | "b" }
+#     Response JSON:
+#       { "moves": { "e2": ["e2e4", "e2e3"], ... } }
+#     """
+#     data = request.get_json()
+#     if not data or "player" not in data:
+#         return jsonify({"error": "Missing 'player' field in request"}), 400
+
+#     player = data["player"].lower()
+#     if player not in ["w", "b"]:
+#         return jsonify({"error": "Invalid player. Must be 'w' or 'b'"}), 400
+
+#     # Send the getmoves command to Sunfish
+#     command = f"getmoves"
+#     try:
+#         response = engine.send_command(command)
+
+#         # Parse the response to extract moves
+#         moves = {}
+#         for line in response:
+#             if line.startswith("legal moves:"):
+#                 legal_moves = line.split(":", 1)[1].strip()
+#                 for move in legal_moves.split():
+#                     start_square = move[:2]
+#                     if start_square not in moves:
+#                         moves[start_square] = []
+#                     moves[start_square].append(move)
+
+#         return jsonify({"moves": moves})
+#     except TimeoutError as e:
+#         logger.error(f"Timeout error: {e}")
+#         return jsonify({"error": "Engine timed out waiting for response"}), 504
+#     except Exception as e:
+#         logger.error(f"Error processing command: {e}")
+#         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5500, debug=True)
