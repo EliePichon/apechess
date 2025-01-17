@@ -144,17 +144,13 @@ def perft(pos, depth, debug=False):
     print("Nodes searched:", total)
 
 
-def run(sunfish_module, startpos, shared_state=None):
+def run(sunfish_module, startpos, callback=None):
     global sunfish
     sunfish = sunfish_module
 
     debug = True
     hist = [startpos]
     searcher = sunfish.Searcher()
-
-    # Initialize shared state
-    if shared_state is not None:
-        shared_state["hist"] = hist
         
     with ThreadPoolExecutor(max_workers=1) as executor:
         # Noop future to get started
@@ -217,22 +213,26 @@ def run(sunfish_module, startpos, shared_state=None):
                     logger.debug("received fen postion command")
                     pos = from_fen(*args[2:8])
                     hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
-                    if len(args) > 8:
-                        assert args[8] == "moves"
+                    if len(args) > 8 and args[8] == "moves":
                         for move in args[9:]:
                             hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
+
+                    # Call the callback with the current position
+                    if callback:
+                        callback(hist[-1])
+
                     # Write a confirmation response
                     print("info string position set successfully")
 
                 # New function : get moves
                 elif args[0] == "getmoves":
-                    logger.debug("received getmoves command")
 
                     # Example: getmoves e2 P
                     if len(args) < 2:
                         print("info string getmoves requires a square (and optional piece type)")
                         continue
 
+                    logger.debug("received getmoves command")
                     square = args[1]  # e.g., "e2"
                     piece_filter = args[2] if len(args) > 2 else None  # e.g., "P"
 
