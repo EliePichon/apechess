@@ -99,18 +99,15 @@ def get_moves_endpoint():
     """
     Get all legal moves for the current position.
     Request JSON:
-      { "fen": "<fen_string>", "side": "w|b" }
+      { "fen": "<fen_string>" }
     Response JSON:
       { "moves": { "e2": ["e2e4", "e2e3"], ... } }
     """
     data = request.get_json()
     if not data or "fen" not in data or "side" not in data:
-        return jsonify({"error": "Missing 'fen' or 'side' field"}), 400
+        return jsonify({"error": "Missing 'fen' field"}), 400
 
     fen = data["fen"]
-    side = data["side"].lower()
-    if side not in ["w", "b"]:
-        return jsonify({"error": "Invalid side. Must be 'w' or 'b'."}), 400
 
     commands = [f"position fen {fen}"]
     try:
@@ -119,7 +116,7 @@ def get_moves_endpoint():
             return jsonify({"error": "Unable to retrieve position from UCI."}), 500
 
         # Collect moves for the specified side
-        player_pieces = set("PNBRQK") if side == "w" else set("pnbrqk")
+        player_pieces = set("PNBRQK") #Always white since we just sent a fen position => sunfish flipped if black
         moves = {}
         for i, piece in enumerate(position.board):
             if piece in player_pieces:
