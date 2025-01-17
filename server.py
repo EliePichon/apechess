@@ -108,6 +108,11 @@ def get_moves_endpoint():
         return jsonify({"error": "Missing 'fen' field"}), 400
 
     fen = data["fen"]
+    # Extract side to move from the FEN string
+    fen_parts = fen.split()
+    if len(fen_parts) < 2:
+        return jsonify({"error": "Invalid FEN string"}), 400
+    side_to_move = fen_parts[1]  # 'w' or 'b'
 
     commands = [f"position fen {fen}"]
     try:
@@ -123,10 +128,21 @@ def get_moves_endpoint():
                 legal_moves = position.get_legal_moves(square=i)
                 if legal_moves:
                     square = sunfish.render(i)
-                    moves[square] = [
+                    rendered_moves = [
                         sunfish.render(move.i) + sunfish.render(move.j) + move.prom.lower()
                         for move in legal_moves
                     ]
+
+                    # If it's Black's turn, re-flip the moves
+                    if side_to_move == "b":
+                        flipped_square = sunfish.render(119 - i)
+                        flipped_moves = [
+                            sunfish.render(119 - move.i) + sunfish.render(119 - move.j) + move.prom.lower()
+                            for move in legal_moves
+                        ]
+                        moves[flipped_square] = flipped_moves
+                    else:
+                        moves[square] = rendered_moves
 
         return jsonify({"moves": moves})
     except TimeoutError as e:
