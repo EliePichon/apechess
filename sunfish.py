@@ -4,11 +4,15 @@ from __future__ import print_function
 import time, math
 from itertools import count
 from collections import namedtuple, defaultdict
+import logging
 
 # If we could rely on the env -S argument, we could just use "pypy3 -u"
 # as the shebang to unbuffer stdout. But alas we have to do this instead:
 #from functools import partial
 #print = partial(print, flush=True)
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 version = "sunfish 2023"
 
@@ -214,6 +218,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         if i == H1: wc = (wc[0], False)
         if j == A8: bc = (bc[0], False)
         if j == H8: bc = (False, bc[1])
+
         # Castling
         if p == "K":
             wc = (False, False)
@@ -230,6 +235,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if j == self.ep:
                 board = put(board, j + S, ".")
         # We rotate the returned position, so it's ready for the next player
+
         return Position(board, score, wc, bc, ep, kp).rotate()
 
     def value(self, move):
@@ -277,26 +283,10 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if piece_filter is not None and self.board[move.i] != piece_filter:
                 continue  # Skip moves not involving the specified piece
             # Check legality (king not in check after move)
-            if not self.is_king_in_check(self.move(move)):
-                moves.append(move)
+            # if not can_kill_king(pos)):
+            moves.append(move)
 
         return moves
-
-    def is_king_in_check(self, position):
-        """
-        Check if the king is under attack in the given position.
-
-        Args:
-        - position: Position object.
-
-        Returns:
-        - True if the king is attacked, False otherwise.
-        """
-        king_square = position.board.index("K")  # Find the king's position
-        for move in position.gen_moves():
-            if move.j == king_square:
-                return True
-        return False
 
 
 ###############################################################################

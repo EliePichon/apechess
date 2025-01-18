@@ -33,7 +33,7 @@ class BlockingInput:
         """Required for Werkzeug reloader compatibility."""
         return False
 
-def run_uci_session(commands, callback=None, expected_response=None, timeout=15):
+def run_uci_session(commands, expected_response=None, timeout=15):
     """
     Run a new UCI session, send commands, and capture the response.
 
@@ -116,7 +116,7 @@ def get_moves_endpoint():
 
     commands = [f"position fen {fen}"]
     try:
-        _, position = run_uci_session(commands, callback=True)
+        _, position = run_uci_session(commands)
         if not position:
             return jsonify({"error": "Unable to retrieve position from UCI."}), 500
 
@@ -166,6 +166,12 @@ def bestmove_endpoint():
         return jsonify({"error": "Missing 'fen' field"}), 400
 
     fen = data["fen"]
+    # Extract side to move from the FEN string
+    fen_parts = fen.split()
+    if len(fen_parts) < 2:
+        return jsonify({"error": "Invalid FEN string"}), 400
+    side_to_move = fen_parts[1]  # 'w' or 'b'
+
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
 
@@ -179,7 +185,7 @@ def bestmove_endpoint():
 
     commands = [f"position fen {fen}", go_command]
     try:
-        response, _ = run_uci_session(commands, expected_response="bestmove")  # Retrieve only response
+        response, position = run_uci_session(commands, expected_response="bestmove")
         bestmove_line = response[0] if response else None
         if not bestmove_line:
             return jsonify({"bestmove": "(none)"})
@@ -187,8 +193,21 @@ def bestmove_endpoint():
         # Correctly handle the response as a string
         parts = bestmove_line.split()
         bestmove = parts[1] if len(parts) > 1 else "(none)"
-        return jsonify({"bestmove": bestmove})
 
+        is_check = False
+        if position:
+            # If it's black turn, the bord in Position is rotated as white
+            logger.debug(f'board position we got after the bestmove {position.board}')
+            if side_to_move == 'b':
+                move = 119 - sunfish.parse(bestmove[:2]), 119 - sunfish.parse(bestmove[2:4])
+            else:
+                move = sunfish.parse(bestmove[:2]), sunfish.parse(bestmove[2:4])
+            new_position = position.move(sunfish.Move(move[0], move[1], bestmove[4:] if len(bestmove) > 4 else ""))
+            logger.debug(f'new position after {new_position.board}')
+            is_check = uci.can_kill_king(new_position.rotate())
+            logger.debug(f'can kill king in this pos ? {is_check}')
+
+        return jsonify({"bestmove": bestmove, "check": is_check})
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
         return jsonify({"error": "Engine timed out while computing best move"}), 504
