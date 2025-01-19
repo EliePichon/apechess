@@ -203,10 +203,7 @@ def bestmove_endpoint():
             else:
                 move = sunfish.parse(bestmove[:2]), sunfish.parse(bestmove[2:4])
             new_position = position.move(sunfish.Move(move[0], move[1], bestmove[4:] if len(bestmove) > 4 else ""))
-            logger.debug(f'new position after {new_position.board}')
             is_check = uci.can_kill_king(new_position.rotate())
-            logger.debug(f'can kill king in this pos ? {is_check}')
-
         return jsonify({"bestmove": bestmove, "check": is_check})
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
@@ -215,5 +212,32 @@ def bestmove_endpoint():
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route("/ischeck", methods=["POST"])
+def is_check():
+    """
+    Is the active player in check atm ?
+    Request JSON:
+      { "fen": "<fen_string>" }
+    Response JSON:
+      { "check": "true/false" }
+    """
+    data = request.get_json()
+    if not data or "fen" not in data:
+        return jsonify({"error": "Missing 'fen' field"}), 400
+
+    fen = data["fen"]
+    commands = [f"position fen {fen}"]
+    try:
+        _, position = run_uci_session(commands)
+        is_check = False
+        if position:
+            logger.debug(f'board position we evaluate check {position.board}')
+            # If it's black turn, the bord in Position is rotated as white
+            is_check = uci.can_kill_king(position.rotate())
+        return jsonify({"check": is_check})
+    except Exception as e:
+        logger.error(f"Error processing request: {e}")
+        return jsonify({"error": str(e)}), 500
+    
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5500, debug=True)

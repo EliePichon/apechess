@@ -1,9 +1,8 @@
 #!/usr/bin/env pypy3
 from __future__ import print_function
 
-import time, math
 from itertools import count
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 import logging
 import tools.uci as uci
 
