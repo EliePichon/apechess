@@ -15,7 +15,10 @@ logger = logging.getLogger(__name__)
 
 # Flask app
 app = Flask(__name__)
-CORS(app, resources={r"/getmoves": {"origins": "*"}, r"/bestmove": {"origins": "*"}})
+CORS(app,
+    resources={r"/getmoves": {"origins": "*"},
+               r"/bestmove": {"origins": "*"},
+               r"/ischeck": {"origins": "*"}})
 
 class BlockingInput:
     def __init__(self):
