@@ -104,7 +104,7 @@ def get_moves_endpoint():
       { "moves": { "e2": ["e2e4", "e2e3"], ... } }
     """
     data = request.get_json()
-    if not data or "fen" not in data or "side" not in data:
+    if not data or "fen" not in data:
         return jsonify({"error": "Missing 'fen' field"}), 400
 
     fen = data["fen"]

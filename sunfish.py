@@ -5,6 +5,8 @@ import time, math
 from itertools import count
 from collections import namedtuple, defaultdict
 import logging
+import tools.uci as uci
+
 
 # If we could rely on the env -S argument, we could just use "pypy3 -u"
 # as the shebang to unbuffer stdout. But alas we have to do this instead:
@@ -261,7 +263,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 score += pst["P"][119 - (j + S)]
         return score
 
-    def get_legal_moves(self, square=None, piece_filter=None):
+    def get_legal_moves(self, square=None):
         """
         Get all legal moves for a given square and/or piece type.
 
@@ -280,11 +282,9 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         for move in self.gen_moves():
             if square is not None and move.i != square:
                 continue  # Skip moves not starting from the specified square
-            if piece_filter is not None and self.board[move.i] != piece_filter:
-                continue  # Skip moves not involving the specified piece
             # Check legality (king not in check after move)
-            # if not can_kill_king(pos)):
-            moves.append(move)
+            if not uci.can_kill_king (self.move(move)):
+                moves.append(move)
 
         return moves
 
