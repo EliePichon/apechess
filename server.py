@@ -70,7 +70,6 @@ def run_uci_session(commands, expected_response=None, timeout=15):
 
     # Send commands
     for cmd in commands:
-        logger.debug(f"Sending command: {cmd}")
         input_stream.write(cmd + "\n")
 
     start_time = time.time()
@@ -81,7 +80,6 @@ def run_uci_session(commands, expected_response=None, timeout=15):
         if expected_response:
             filtered_response = [line for line in response if line.startswith(expected_response)]
             if filtered_response:
-                logger.debug(f"Matched response: {filtered_response}")
                 input_stream.write("quit\n")
                 thread.join(timeout=5.0)
                 return filtered_response, position_holder["position"]
@@ -100,11 +98,12 @@ def run_uci_session(commands, expected_response=None, timeout=15):
 @app.route("/getmoves", methods=["POST"])
 def get_moves_endpoint():
     """
-    Get all legal moves for the current position.
+    Get all legal moves for the current position. 
     Request JSON:
       { "fen": "<fen_string>" }
     Response JSON:
-      { "moves": { "e2": ["e2e4", "e2e3"], ... } }
+      { "moves": { "e2": ["e2e4", "e2e3"], ... }, "check" : "true/false }
+
     """
     data = request.get_json()
     if not data or "fen" not in data:
@@ -146,8 +145,9 @@ def get_moves_endpoint():
                         moves[flipped_square] = flipped_moves
                     else:
                         moves[square] = rendered_moves
-
-        return jsonify({"moves": moves})
+        rotated_pos = position.rotate()
+        is_check = uci.can_kill_king(rotated_pos)
+        return jsonify({"moves": moves, "check": is_check})
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
         return jsonify({"error": "Engine timed out while getting moves"}), 504
@@ -200,7 +200,6 @@ def bestmove_endpoint():
         is_check = False
         if position:
             # If it's black turn, the bord in Position is rotated as white
-            logger.debug(f'board position we got after the bestmove {position.board}')
             if side_to_move == 'b':
                 move = 119 - sunfish.parse(bestmove[:2]), 119 - sunfish.parse(bestmove[2:4])
             else:
@@ -234,9 +233,7 @@ def is_check():
         _, position = run_uci_session(commands)
         is_check = False
         if position:
-            logger.debug(f'board position we evaluate check {position.board}')
-            # If it's black turn, the bord in Position is rotated as white
-            is_check = uci.can_kill_king(position.rotate())
+            is_check = uci.can_kill_king(position)
         return jsonify({"check": is_check})
     except Exception as e:
         logger.error(f"Error processing request: {e}")
