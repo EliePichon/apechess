@@ -1,14 +1,19 @@
 #!/usr/bin/env pypy3
 from __future__ import print_function
 
-import time, math
 from itertools import count
-from collections import namedtuple, defaultdict
+from collections import namedtuple
+import logging
+import tools.uci as uci
+
 
 # If we could rely on the env -S argument, we could just use "pypy3 -u"
 # as the shebang to unbuffer stdout. But alas we have to do this instead:
 #from functools import partial
 #print = partial(print, flush=True)
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 version = "sunfish 2023"
 
@@ -214,6 +219,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         if i == H1: wc = (wc[0], False)
         if j == A8: bc = (bc[0], False)
         if j == H8: bc = (False, bc[1])
+
         # Castling
         if p == "K":
             wc = (False, False)
@@ -230,6 +236,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if j == self.ep:
                 board = put(board, j + S, ".")
         # We rotate the returned position, so it's ready for the next player
+
         return Position(board, score, wc, bc, ep, kp).rotate()
 
     def value(self, move):
@@ -254,6 +261,31 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if j == self.ep:
                 score += pst["P"][119 - (j + S)]
         return score
+
+    def get_legal_moves(self, square=None):
+        """
+        Get all legal moves for a given square and/or piece type.
+
+        Args:
+        - square (str or int): The square to filter moves from (e.g., 'e2' or 85).
+        - piece_filter (str): Optional. The piece type to filter moves (e.g., 'P', 'N').
+
+        Returns:
+        - List of legal moves in Move format.
+        """
+        # Parse the square if given in algebraic notation
+        if isinstance(square, str):
+            square = parse(square)
+
+        moves = []
+        for move in self.gen_moves():
+            if square is not None and move.i != square:
+                continue  # Skip moves not starting from the specified square
+            # Check legality (king not in check after move)
+            if not uci.can_kill_king (self.move(move)):
+                moves.append(move)
+
+        return moves
 
 
 ###############################################################################
@@ -452,49 +484,3 @@ hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 # minifier-hide start
 import sys, tools.uci
 tools.uci.run(sys.modules[__name__], hist[-1])
-sys.exit()
-# minifier-hide end
-
-searcher = Searcher()
-while True:
-    args = input().split()
-    if args[0] == "uci":
-        print("id name", version)
-        print("uciok")
-
-    elif args[0] == "isready":
-        print("readyok")
-
-    elif args[0] == "quit":
-        break
-
-    elif args[:2] == ["position", "startpos"]:
-        del hist[1:]
-        for ply, move in enumerate(args[3:]):
-            i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-            if ply % 2 == 1:
-                i, j = 119 - i, 119 - j
-            hist.append(hist[-1].move(Move(i, j, prom)))
-
-    elif args[0] == "go":
-        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
-        if len(hist) % 2 == 0:
-            wtime, winc = btime, binc
-        think = min(wtime / 40 + winc, wtime / 2 - 1)
-
-        start = time.time()
-        move_str = None
-        for depth, gamma, score, move in Searcher().search(hist):
-            # The only way we can be sure to have the real move in tp_move,
-            # is if we have just failed high.
-            if score >= gamma:
-                i, j = move.i, move.j
-                if len(hist) % 2 == 0:
-                    i, j = 119 - i, 119 - j
-                move_str = render(i) + render(j) + move.prom.lower()
-                print("info depth", depth, "score cp", score, "pv", move_str)
-            if move_str and time.time() - start > think * 0.8:
-                break
-
-        print("bestmove", move_str or '(none)')
-
