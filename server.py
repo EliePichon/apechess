@@ -204,7 +204,7 @@ def bestmove_endpoint():
                 move = 119 - sunfish.parse(bestmove[:2]), 119 - sunfish.parse(bestmove[2:4])
             else:
                 move = sunfish.parse(bestmove[:2]), sunfish.parse(bestmove[2:4])
-            new_position = position.move(sunfish.Move(move[0], move[1], bestmove[4:] if len(bestmove) > 4 else ""))
+            new_position = position.move(sunfish.Move(move[0], move[1], bestmove[4:].upper() if len(bestmove) > 4 else ""))
             is_check = uci.can_kill_king(new_position.rotate())
         return jsonify({"bestmove": bestmove, "check": is_check})
     except TimeoutError as e:
