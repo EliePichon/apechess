@@ -1,5 +1,6 @@
 # Advanced UCI interface
 
+import sys
 import re, time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
@@ -7,10 +8,19 @@ from functools import partial
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("sunfish")
+logger.setLevel(logging.DEBUG)
 
-print = partial(print, flush=True)
+# Create a handler that still goes to original stdout or to stderr
+console_handler = logging.StreamHandler(sys.stderr)
+console_handler.setLevel(logging.DEBUG)
+
+# Format if you like
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+console_handler.setFormatter(formatter)
+
+logger.addHandler(console_handler)
+
 
 
 def render_move(move, white_pov):
@@ -31,9 +41,9 @@ def parse_move(move_str, white_pov):
     return sunfish.Move(i, j, prom)
 
 
-def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False):
+def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=5, debug=False):
     if debug:
-        print(f"Going movetime={max_movetime}, depth={max_depth}")
+        logger.debug(f"Going movetime={max_movetime}, depth={max_depth}")
 
     start = time.time()
     best_move = None
@@ -56,7 +66,8 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
             fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False))
         else:
             fields["score cp"] = f"{score} upperbound"
-        print("info", " ".join(f"{k} {v}" for k, v in fields.items()))
+        print("info", " ".join(f"{k} {v}" for k, v in fields.items()),flush=True)
+        #logger.debug("info"+ " ".join(f"{k} {v}" for k, v in fields.items()))
 
         # We may not have a move yet at depth = 1
         if depth > 1:
@@ -65,13 +76,8 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
             if stop_event.is_set():
                 break
 
-    # FIXME: If we are in "go infinite" we aren't actually supposed to stop the
-    # go-loop before we got stop_event. Unfortunately we currently don't know if
-    # we are in "go infinite" since it's simply translated to "go depth 100".
-
     my_pv = pv(searcher, hist[-1], include_scores=False)
-    logger.debug("found bestmove "+ my_pv[0] if my_pv else "(none)")
-    print("bestmove", my_pv[0] if my_pv else "(none)")
+    print("bestmove", my_pv[0] if my_pv else "(none)", flush=True)
 
 
 def mate_loop(
@@ -115,7 +121,7 @@ def mate_loop(
             break
     move = searcher.tp_move.get(hist[-1])
     move_str = render_move(move, white_pov=len(hist) % 2 == 1)
-    print("bestmove", move_str)
+    print("bestmove", move_str, flush=True)
 
 
 def perft(pos, depth, debug=False):
@@ -210,7 +216,6 @@ def run(sunfish_module, startpos, callback=None):
                         hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
                 elif args[:2] == ["position", "fen"]:
-                    logger.debug("received fen postion command")
                     pos = from_fen(*args[2:8])
                     hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
                     if len(args) > 8 and args[8] == "moves":
@@ -232,19 +237,16 @@ def run(sunfish_module, startpos, callback=None):
                         print("info string getmoves requires a square (and optional piece type)")
                         continue
 
-                    logger.debug("received getmoves command")
                     square = args[1]  # e.g., "e2"
                     piece_filter = args[2] if len(args) > 2 else None  # e.g., "P"
 
                     moves = hist[-1].get_legal_moves(square=square, piece_filter=piece_filter)
                     moves_uci = [render_move(move, white_pov=len(hist) % 2 == 1) for move in moves]
-                    logger.debug("legal moves:", " ".join(moves_uci))
-                    print("legal moves:", " ".join(moves_uci))
+                    print("legal moves:", " ".join(moves_uci), flush=True)
 
                 elif args[0] == "go":
-                    logger.debug("received go command")
                     think = 10**6
-                    max_depth = 100
+                    max_depth = 10
                     loop = go_loop
 
                     if args[1:] == [] or args[1] == "infinite":
@@ -295,7 +297,7 @@ def run(sunfish_module, startpos, callback=None):
             except (KeyboardInterrupt, EOFError):
                 if go_future.running():
                     if debug:
-                        print("Stopping go loop...")
+                        print("Stopping go loop...", flush=True)
                     do_stop_event.set()
                     go_future.result()
                 break

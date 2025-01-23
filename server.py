@@ -36,7 +36,7 @@ class BlockingInput:
         """Required for Werkzeug reloader compatibility."""
         return False
 
-def run_uci_session(commands, expected_response=None, timeout=15):
+def run_uci_session(commands, expected_response=None, timeout=25):
     """
     Run a new UCI session, send commands, and capture the response.
 
@@ -81,18 +81,18 @@ def run_uci_session(commands, expected_response=None, timeout=15):
             filtered_response = [line for line in response if line.startswith(expected_response)]
             if filtered_response:
                 input_stream.write("quit\n")
-                thread.join(timeout=5.0)
+                thread.join(timeout=20.0)
                 return filtered_response, position_holder["position"]
 
         if not expected_response and response:
             input_stream.write("quit\n")
-            thread.join(timeout=5.0)
+            thread.join(timeout=20.0)
             return response, position_holder["position"]
 
         time.sleep(0.1)
 
     input_stream.write("quit\n")
-    thread.join(timeout=5.0)
+    thread.join(timeout=20.0)
     raise TimeoutError(f"UCI session timed out waiting for response: {expected_response}")
 
 @app.route("/getmoves", methods=["POST"])
@@ -181,12 +181,13 @@ def bestmove_endpoint():
     go_command = "go"
     if movetime:
         go_command += f" movetime {movetime}"
-    elif maxdepth:
+    if maxdepth:
         go_command += f" depth {maxdepth}"
     else:
-        go_command += " depth 5"
+        go_command += " depth 8"
 
     commands = [f"position fen {fen}", go_command]
+    logger.debug(commands)
     try:
         response, position = run_uci_session(commands, expected_response="bestmove")
         bestmove_line = response[0] if response else None
@@ -197,6 +198,7 @@ def bestmove_endpoint():
         if bestmove == "(none)":
             return jsonify({"bestmove": "(none)"})
         is_check = False
+        logger.debug(f'bestmove : {bestmove}')
         if position:
             # If it's black turn, the bord in Position is rotated as white
             if side_to_move == 'b':
