@@ -190,13 +190,12 @@ def bestmove_endpoint():
     try:
         response, position = run_uci_session(commands, expected_response="bestmove")
         bestmove_line = response[0] if response else None
-        if not bestmove_line:
-            return jsonify({"bestmove": "(none)"})
 
         # Correctly handle the response as a string
         parts = bestmove_line.split()
         bestmove = parts[1] if len(parts) > 1 else "(none)"
-
+        if bestmove == "(none)":
+            return jsonify({"bestmove": "(none)"})
         is_check = False
         if position:
             # If it's black turn, the bord in Position is rotated as white
