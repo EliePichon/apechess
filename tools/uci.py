@@ -41,7 +41,7 @@ def parse_move(move_str, white_pov):
     return sunfish.Move(i, j, prom)
 
 
-def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=5, debug=False):
+def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False):
     if debug:
         logger.debug(f"Going movetime={max_movetime}, depth={max_depth}")
 
@@ -85,7 +85,7 @@ def mate_loop(
     hist,
     stop_event,
     max_movetime=0,
-    max_depth=0,
+    max_depth=8,
     find_draw=False,
     debug=False,
 ):
@@ -246,7 +246,7 @@ def run(sunfish_module, startpos, callback=None):
 
                 elif args[0] == "go":
                     think = 10**6
-                    max_depth = 10
+                    max_depth = 8
                     loop = go_loop
 
                     if args[1:] == [] or args[1] == "infinite":
@@ -273,9 +273,12 @@ def run(sunfish_module, startpos, callback=None):
                         max_depth = int(args[2])
                         loop = partial(mate_loop, find_draw=args[1] == "draw")
 
-                    elif args[1] == "perft":
-                        perft(hist[-1], int(args[2]), debug=debug)
-                        continue
+                    precision = 0
+                    if args[3] == "precision":
+                        precision = args[4]
+                    setattr(searcher, 'precision', float(precision))
+
+                    sunfish.opt_ranges.QS
 
                     do_stop_event.clear()
                     go_future = executor.submit(

@@ -177,14 +177,18 @@ def bestmove_endpoint():
 
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
+    precision = data.get("precision", None)
 
     go_command = "go"
     if movetime:
         go_command += f" movetime {movetime}"
-    if maxdepth:
+    elif maxdepth:
         go_command += f" depth {maxdepth}"
     else:
         go_command += " depth 8"
+
+    if precision:
+        go_command += f" precision {precision}"
 
     commands = [f"position fen {fen}", go_command]
     logger.debug(commands)
