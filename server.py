@@ -50,7 +50,7 @@ def run_uci_session(commands, expected_response=None, timeout=25):
     """
     input_stream = BlockingInput()
     output_stream = StringIO()
-    position_holder = {"position": None}  # Shared object to hold the Position object
+    callback_holder = {"position": None, "moves": None}  # Shared object to hold the Position object
 
     def uci_loop():
         sys.stdin = input_stream
@@ -58,8 +58,9 @@ def run_uci_session(commands, expected_response=None, timeout=25):
         startpos = sunfish.Position(
             sunfish.initial, 0, (True, True), (True, True), 0, 0
         )
+        
         try:
-            uci.run(sunfish, startpos, callback=lambda pos: position_holder.update({"position": pos}))
+            uci.run(sunfish, startpos, callbackPos=lambda pos: callback_holder.update({'position':pos}), callbackMove=lambda moves: callback_holder.update({'moves': moves}))
         except Exception as e:
             logger.error(f"UCI loop error: {e}")
         finally:
@@ -82,12 +83,12 @@ def run_uci_session(commands, expected_response=None, timeout=25):
             if filtered_response:
                 input_stream.write("quit\n")
                 thread.join(timeout=20.0)
-                return filtered_response, position_holder["position"]
+                return filtered_response, callback_holder
 
         if not expected_response and response:
             input_stream.write("quit\n")
             thread.join(timeout=20.0)
-            return response, position_holder["position"]
+            return response, callback_holder
 
         time.sleep(0.1)
 
@@ -118,7 +119,8 @@ def get_moves_endpoint():
 
     commands = [f"position fen {fen}"]
     try:
-        _, position = run_uci_session(commands)
+        _, holder = run_uci_session(commands)
+        position = holder['position']
         if not position:
             return jsonify({"error": "Unable to retrieve position from UCI."}), 500
 
@@ -193,7 +195,9 @@ def bestmove_endpoint():
     commands = [f"position fen {fen}", go_command]
     logger.debug(commands)
     try:
-        response, position = run_uci_session(commands, expected_response="bestmove")
+        response, holder = run_uci_session(commands, expected_response="bestmove")
+        position = holder['position']
+        moves = holder['moves']
         bestmove_line = response[0] if response else None
 
         # Correctly handle the response as a string
@@ -211,7 +215,7 @@ def bestmove_endpoint():
                 move = sunfish.parse(bestmove[:2]), sunfish.parse(bestmove[2:4])
             new_position = position.move(sunfish.Move(move[0], move[1], bestmove[4:].upper() if len(bestmove) > 4 else ""))
             is_check = uci.can_kill_king(new_position.rotate())
-        return jsonify({"bestmove": bestmove, "check": is_check})
+        return jsonify({"bestmove": bestmove, "check": is_check, "allmoves" : moves})
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
         return jsonify({"error": "Engine timed out while computing best move"}), 504
@@ -235,7 +239,8 @@ def is_check():
     fen = data["fen"]
     commands = [f"position fen {fen}"]
     try:
-        _, position = run_uci_session(commands)
+        _, holder = run_uci_session(commands)
+        position = holder['position']
         is_check = False
         if position:
             is_check = uci.can_kill_king(position)

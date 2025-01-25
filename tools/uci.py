@@ -40,13 +40,13 @@ def parse_move(move_str, white_pov):
         i, j = 119 - i, 119 - j
     return sunfish.Move(i, j, prom)
 
-
-def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False):
+def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None):
     if debug:
         logger.debug(f"Going movetime={max_movetime}, depth={max_depth}")
 
     start = time.time()
     best_move = None
+    #1
     for depth, gamma, score, move in searcher.search(hist):
         # Our max_depth implementation is a bit wasteful.
         # We never know when we've seen the last at a certain depth
@@ -66,8 +66,8 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
             fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False))
         else:
             fields["score cp"] = f"{score} upperbound"
-        print("info", " ".join(f"{k} {v}" for k, v in fields.items()),flush=True)
-        #logger.debug("info"+ " ".join(f"{k} {v}" for k, v in fields.items()))
+        # print("info", " ".join(f"{k} {v}" for k, v in fields.items()),flush=True)
+        # logger.debug("info"+ " ".join(f"{k} {v}" for k, v in fields.items()))
 
         # We may not have a move yet at depth = 1
         if depth > 1:
@@ -75,8 +75,26 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
                 break
             if stop_event.is_set():
                 break
+    #2
+    pos = hist[-1]
+    move_list = list(pos.gen_moves())
+    if not move_list:
+        # No legal moves
+        print("bestmove", "(none)", flush=True)
+        return
+    #3
+    scored_moves = []
+    for move in move_list:
+        base_score = pos.value(move)
+        scored_moves.append((render_move(move, len(hist) % 2 == 1), base_score))
+    
+    # 4) Sort descending by score
+    scored_moves.sort(key=lambda x: x[1], reverse=True)
 
+    callbackMove(scored_moves)
     my_pv = pv(searcher, hist[-1], include_scores=False)
+    my_pv2 = pv(searcher, hist[-1], include_scores=True)
+    logger.debug(my_pv2)
     print("bestmove", my_pv[0] if my_pv else "(none)", flush=True)
 
 
@@ -150,7 +168,7 @@ def perft(pos, depth, debug=False):
     print("Nodes searched:", total)
 
 
-def run(sunfish_module, startpos, callback=None):
+def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
     global sunfish
     sunfish = sunfish_module
 
@@ -223,8 +241,8 @@ def run(sunfish_module, startpos, callback=None):
                             hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
 
                     # Call the callback with the current position
-                    if callback:
-                        callback(hist[-1])
+                    if callbackPos:
+                        callbackPos(hist[-1])
 
                     # Write a confirmation response
                     print("info string position set successfully")
@@ -278,8 +296,6 @@ def run(sunfish_module, startpos, callback=None):
                         precision = args[4]
                     setattr(searcher, 'precision', float(precision))
 
-                    sunfish.opt_ranges.QS
-
                     do_stop_event.clear()
                     go_future = executor.submit(
                         loop,
@@ -289,6 +305,7 @@ def run(sunfish_module, startpos, callback=None):
                         think,
                         max_depth,
                         debug=debug,
+                        callbackMove=callbackMove
                     )
 
                     # Make sure we get informed if the job fails
