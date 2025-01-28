@@ -92,10 +92,9 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
     scored_moves.sort(key=lambda x: x[1], reverse=True)
 
     callbackMove(scored_moves)
-    my_pv = pv(searcher, hist[-1], include_scores=False)
-    my_pv2 = pv(searcher, hist[-1], include_scores=True)
-    logger.debug(my_pv2)
-    print("bestmove", my_pv[0] if my_pv else "(none)", flush=True)
+    my_pv = pv(searcher, hist[-1], include_scores=True)
+    logger.debug(my_pv)
+    print("bestmove", my_pv[1] if my_pv else "(none)","score "+my_pv[2],  flush=True)
 
 
 def mate_loop(

@@ -189,8 +189,7 @@ def bestmove_endpoint():
     else:
         go_command += " depth 8"
 
-    if precision:
-        go_command += f" precision {precision}"
+    go_command += f" precision {precision if precision else 0}"
 
     commands = [f"position fen {fen}", go_command]
     logger.debug(commands)
@@ -203,10 +202,12 @@ def bestmove_endpoint():
         # Correctly handle the response as a string
         parts = bestmove_line.split()
         bestmove = parts[1] if len(parts) > 1 else "(none)"
+        score = parts[3] if len(parts) > 3 else "(none)"
         if bestmove == "(none)":
             return jsonify({"bestmove": "(none)"})
+        
         is_check = False
-        logger.debug(f'bestmove : {bestmove}')
+        logger.debug(f'bestmove : {bestmove} score: {score}')
         if position:
             # If it's black turn, the bord in Position is rotated as white
             if side_to_move == 'b':
@@ -215,7 +216,7 @@ def bestmove_endpoint():
                 move = sunfish.parse(bestmove[:2]), sunfish.parse(bestmove[2:4])
             new_position = position.move(sunfish.Move(move[0], move[1], bestmove[4:].upper() if len(bestmove) > 4 else ""))
             is_check = uci.can_kill_king(new_position.rotate())
-        return jsonify({"bestmove": bestmove, "check": is_check, "allmoves" : moves})
+        return jsonify({"bestmove": bestmove, "score":score, "check": is_check, "allmoves" : moves})
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
         return jsonify({"error": "Engine timed out while computing best move"}), 504
