@@ -82,11 +82,11 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
         # No legal moves
         print("bestmove", "(none)", flush=True)
         return
-    #3q
+    #3
     scored_moves = []
     for move in move_list:
         base_score = pos.value(move)
-        if not can_kill_king (pos.move(move)):
+        if not can_kill_king (pos.move(move)) and base_score >=0:
             scored_moves.append((render_move(move, len(hist) % 2 == 1), base_score))
     
     # 4) Sort descending by score
@@ -94,8 +94,9 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
 
     callbackMove(scored_moves)
     my_pv = pv(searcher, hist[-1], include_scores=True)
-    logger.debug(my_pv)
-    print("bestmove", my_pv[1] if my_pv else "(none)","score "+my_pv[2],  flush=True)
+
+    #logger.debug(int(my_pv[2])-pos.score)
+    print("bestmove", my_pv[1] if my_pv else "(none)","score "+str(int(my_pv[2])-pos.score),  flush=True)
 
 
 def mate_loop(
