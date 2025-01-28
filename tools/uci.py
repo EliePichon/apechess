@@ -82,11 +82,12 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
         # No legal moves
         print("bestmove", "(none)", flush=True)
         return
-    #3
+    #3q
     scored_moves = []
     for move in move_list:
         base_score = pos.value(move)
-        scored_moves.append((render_move(move, len(hist) % 2 == 1), base_score))
+        if not can_kill_king (pos.move(move)):
+            scored_moves.append((render_move(move, len(hist) % 2 == 1), base_score))
     
     # 4) Sort descending by score
     scored_moves.sort(key=lambda x: x[1], reverse=True)
