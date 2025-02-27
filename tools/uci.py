@@ -79,25 +79,39 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
     pos = hist[-1]
     move_list = list(pos.gen_moves())
     if not move_list:
-        # No legal moves
+        # No legal moves = PAT|| MATE
         print("bestmove", "(none)", flush=True)
         return
     #3
     scored_moves = []
     for move in move_list:
         base_score = pos.value(move)
-        if not can_kill_king (pos.move(move)) and base_score >=0:
+        if not can_kill_king (pos.move(move)):
             scored_moves.append((render_move(move, len(hist) % 2 == 1), base_score))
     
     # 4) Sort descending by score
     scored_moves.sort(key=lambda x: x[1], reverse=True)
 
     callbackMove(scored_moves)
-    my_pv = pv(searcher, hist[-1], include_scores=True)
+    my_pv = pv(searcher, hist[-1], include_scores=True)        
 
-    #logger.debug(int(my_pv[2])-pos.score)
-    print("bestmove", my_pv[1] if my_pv else "(none)","score "+str(int(my_pv[2])-pos.score),  flush=True)
-
+    if my_pv and len(my_pv) >= 3:
+        bestmove_str = my_pv[1]
+        score_str    = my_pv[2]
+        print("bestmove", bestmove_str, "score", int(score_str) - pos.score, flush=True)
+    elif my_pv and len(my_pv) == 2:
+        # We have only ["<score>", "<move>"]
+        bestmove_str = my_pv[1]
+        print("bestmove", bestmove_str, flush=True)
+    elif len(scored_moves) > 0:
+        logger.debug('Fallback move')
+        logger.debug(scored_moves[0])
+        print("bestmove", scored_moves[0][0], "score", scored_moves[0][1], flush=True)
+    else:   
+        logger.debug('NO mOVE AT ALL 2')
+        logger.debug('MOVES')
+        logger.debug(move_list)
+        print("bestmove (none)", flush=True)
 
 def mate_loop(
     searcher,
