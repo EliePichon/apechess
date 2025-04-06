@@ -180,6 +180,7 @@ def bestmove_endpoint():
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
     precision = data.get("precision", None)
+    moves_history = data.get("moves", [])
 
     go_command = "go"
     if movetime:
@@ -191,7 +192,13 @@ def bestmove_endpoint():
 
     go_command += f" precision {precision if precision else 0}"
 
-    commands = [f"position fen {fen}", go_command]
+
+    # Build the position command with moves history
+    position_command = f"position fen {fen}"
+    if moves_history:
+        position_command += " moves " + " ".join(moves_history)
+
+    commands = [position_command, go_command]
     logger.debug(commands)
     try:
         response, holder = run_uci_session(commands, expected_response="bestmove")
