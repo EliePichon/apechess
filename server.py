@@ -52,6 +52,7 @@ def run_uci_session(commands, expected_response=None, timeout=25):
     output_stream = StringIO()
     callback_holder = {"position": None, "moves": None}  # Shared object to hold the Position object
 
+    logger.debug(f"Starting UCI session... commands: {commands}")
     def uci_loop():
         sys.stdin = input_stream
         sys.stdout = output_stream
@@ -171,16 +172,22 @@ def bestmove_endpoint():
         return jsonify({"error": "Missing 'fen' field"}), 400
 
     fen = data["fen"]
-    # Extract side to move from the FEN string
+    # Extract the original side from the FEN
     fen_parts = fen.split()
     if len(fen_parts) < 2:
         return jsonify({"error": "Invalid FEN string"}), 400
-    side_to_move = fen_parts[1]  # 'w' or 'b'
+    initial_side = fen_parts[1]  # 'w' or 'b'
 
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
     precision = data.get("precision", None)
-    moves_history = data.get("moves", [])
+    moves_history = data.get("moves", "").lower()
+
+    logger.debug(f"Received FEN: {fen}")
+    logger.debug(f"Received movetime: {movetime}")
+    logger.debug(f"Received maxdepth: {maxdepth}")
+    logger.debug(f"Received precision: {precision}")
+    logger.debug(f"Received moves history: {moves_history}")
 
     go_command = "go"
     if movetime:
@@ -192,11 +199,10 @@ def bestmove_endpoint():
 
     go_command += f" precision {precision if precision else 0}"
 
-
-    # Build the position command with moves history
+    # Build the position command with moves history.
     position_command = f"position fen {fen}"
     if moves_history:
-        position_command += " moves " + " ".join(moves_history)
+        position_command += " moves " + moves_history
 
     commands = [position_command, go_command]
     logger.debug(commands)
@@ -206,24 +212,37 @@ def bestmove_endpoint():
         moves = holder['moves']
         bestmove_line = response[0] if response else None
 
-        # Correctly handle the response as a string
+        # Process the bestmove line (expected format like "bestmove f2f1q score 735").
         parts = bestmove_line.split()
         bestmove = parts[1] if len(parts) > 1 else "(none)"
         score = parts[3] if len(parts) > 3 else "(none)"
         if bestmove == "(none)":
             return jsonify({"bestmove": "(none)"})
-        
-        is_check = False
-        logger.debug(f'bestmove : {bestmove} score: {score}')
-        if position:
-            # If it's black turn, the bord in Position is rotated as white
-            if side_to_move == 'b':
-                move = 119 - sunfish.parse(bestmove[:2]), 119 - sunfish.parse(bestmove[2:4])
-            else:
-                move = sunfish.parse(bestmove[:2]), sunfish.parse(bestmove[2:4])
-            new_position = position.move(sunfish.Move(move[0], move[1], bestmove[4:].upper() if len(bestmove) > 4 else ""))
-            is_check = uci.can_kill_king(new_position.rotate())
-        return jsonify({"bestmove": bestmove, "score":score, "check": is_check, "allmoves" : moves})
+
+        # Determine the effective side.
+        num_moves = len(moves_history.split()) if moves_history.strip() != "" else 0
+        if initial_side == 'w':
+            effective_side = 'w' if (num_moves % 2 == 0) else 'b'
+        else:
+            effective_side = 'b' if (num_moves % 2 == 0) else 'w'
+
+        logger.debug(f"Initial side: {initial_side}, moves count: {num_moves}, effective side: {effective_side}")
+
+        # Parse the bestmove.
+        if effective_side == 'b':
+            # Flip coordinates from white's perspective to black's.
+            move_from = 119 - sunfish.parse(bestmove[:2])
+            move_to = 119 - sunfish.parse(bestmove[2:4])
+        else:
+            move_from = sunfish.parse(bestmove[:2])
+            move_to = sunfish.parse(bestmove[2:4])
+        promo = bestmove[4:].upper() if len(bestmove) > 4 else ""
+
+        new_position = position.move(sunfish.Move(move_from, move_to, promo))
+
+        is_check = uci.can_kill_king(new_position.rotate())
+
+        return jsonify({"bestmove": bestmove, "score": score, "check": is_check, "allmoves": moves})
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
         return jsonify({"error": "Engine timed out while computing best move"}), 504

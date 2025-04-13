@@ -36,6 +36,7 @@ def render_move(move, white_pov):
 def parse_move(move_str, white_pov):
     parse = sunfish.parse
     i, j, prom = parse(move_str[:2]), parse(move_str[2:4]), move_str[4:].upper()
+    logger.debug(f"Parsed move {move_str} to {i}, {j}, {prom}")
     if not white_pov:
         i, j = 119 - i, 119 - j
     return sunfish.Move(i, j, prom)
@@ -249,11 +250,21 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                         hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
                 elif args[:2] == ["position", "fen"]:
+                    # The FEN format is: fen board color castling enpas hclock fclock,
+                    # so args[3] is the side ('w' or 'b').
                     pos = from_fen(*args[2:8])
-                    hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
+                    # For white FEN, keep the board as is;
+                    # for black, initialize history with two entries so that moves alternate properly.
+                    if args[3] == 'b':
+                        hist = [pos.rotate(), pos]
+                    else:
+                        hist = [pos]
                     if len(args) > 8 and args[8] == "moves":
-                        for move in args[9:]:
-                            hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
+                        for move_str in args[9:]:
+                            # Use the alternating scheme: if len(hist) % 2 == 1, then white's move; otherwise black's.
+                            parsed_move = parse_move(move_str, white_pov=(len(hist) % 2 == 1))
+                            hist.append(hist[-1].move(parsed_move))
+                    logger.debug(f"Position {hist[-1]}")
 
                     # Call the callback with the current position
                     if callbackPos:
@@ -278,6 +289,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                     print("legal moves:", " ".join(moves_uci), flush=True)
 
                 elif args[0] == "go":
+                    
                     think = 10**6
                     max_depth = 8
                     loop = go_loop
@@ -310,6 +322,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                     if args[3] == "precision":
                         precision = args[4]
                     setattr(searcher, 'precision', float(precision))
+
 
                     do_stop_event.clear()
                     go_future = executor.submit(
