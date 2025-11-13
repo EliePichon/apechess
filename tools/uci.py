@@ -41,14 +41,17 @@ def parse_move(move_str, white_pov):
         i, j = 119 - i, 119 - j
     return sunfish.Move(i, j, prom)
 
-def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None):
+def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None, top_n=10):
     if debug:
-        logger.debug(f"Going movetime={max_movetime}, depth={max_depth}")
+        logger.debug(f"Going movetime={max_movetime}, depth={max_depth}, top_n={top_n}")
 
     start = time.time()
     best_move = None
-    #1
+    final_depth = 1  # Track the actual depth reached
+
+    #1 - Main iterative deepening search
     for depth, gamma, score, move in searcher.search(hist):
+        final_depth = depth  # Update the depth we actually reached
         # Our max_depth implementation is a bit wasteful.
         # We never know when we've seen the last at a certain depth
         # before we get to the next one
@@ -76,25 +79,108 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
                 break
             if stop_event.is_set():
                 break
-    #2
+
+    #2 - Get all legal moves
     pos = hist[-1]
     move_list = list(pos.gen_moves())
-    if not move_list:
-        # No legal moves = PAT|| MATE
+    legal_moves = [m for m in move_list if not can_kill_king(pos.move(m))]
+
+    if not legal_moves:
+        # No legal moves = STALEMATE or MATE
         print("bestmove", "(none)", flush=True)
         return
-    #3
-    scored_moves = []
-    for move in move_list:
-        base_score = pos.value(move)
-        if not can_kill_king (pos.move(move)):
-            scored_moves.append((render_move(move, len(hist) % 2 == 1), base_score))
-    
-    # 4) Sort descending by score
-    scored_moves.sort(key=lambda x: x[1], reverse=True)
 
+    #3 - Evaluate moves based on top_n parameter
+    scored_moves = []
+
+    # FAST PATH: If only requesting best move (top_n=1), skip multi-move evaluation
+    if top_n == 1:
+        best_move_obj = searcher.tp_move.get(hist[-1])
+        if best_move_obj:
+            move_str = render_move(best_move_obj, len(hist) % 2 == 1)
+            # Get score from PV or transposition table
+            my_pv = pv(searcher, hist[-1], include_scores=True)
+            if len(my_pv) >= 3:
+                score = int(my_pv[2]) - pos.score
+            else:
+                score = pos.value(best_move_obj)
+            scored_moves = [(move_str, score)]
+        elif len(legal_moves) > 0:
+            # Fallback: use first legal move
+            move = legal_moves[0]
+            move_str = render_move(move, len(hist) % 2 == 1)
+            score = pos.value(move)
+            scored_moves = [(move_str, score)]
+
+    # STANDARD PATH: Multi-move evaluation using TT + shallow search
+    else:
+        # Step 3a: Quick screening with TT/static eval for all moves
+        quick_scored = []
+        for move in legal_moves:
+            new_pos = pos.move(move)
+            move_str = render_move(move, len(hist) % 2 == 1)
+
+            # Try to get score from transposition table (fast)
+            score = None
+            for check_depth in range(final_depth - 1, 0, -1):
+                entry = searcher.tp_score.get((new_pos, check_depth, True), None)
+                if entry is not None:
+                    # Only use TT if bounds are reasonable (not too wide)
+                    bound_width = entry.upper - entry.lower
+                    if bound_width < 1000:  # Bounds are tight enough
+                        # Use average of bounds, negate for opponent's perspective
+                        score = -((entry.lower + entry.upper) // 2)
+                        break
+
+            # Fallback to static evaluation if not in TT or bounds too wide
+            if score is None:
+                score = pos.value(move)
+
+            quick_scored.append((move, move_str, score))
+
+        # Step 3b: Sort by quick scores and select top candidates
+        quick_scored.sort(key=lambda x: x[2], reverse=True)
+        # Take top_n + 5 as buffer to ensure we get quality moves
+        top_candidates = quick_scored[:min(top_n + 5, len(quick_scored))]
+
+        # Step 3c: Deep evaluation for top candidates
+        shallow_depth = max(3, final_depth - 3)  # Shallow search depth
+
+        for move, move_str, quick_score in top_candidates:
+            new_pos = pos.move(move)
+
+            # Check if we already have a good TT entry (high depth with tight bounds)
+            score = None
+            for check_depth in range(final_depth - 1, max(0, final_depth - 3), -1):
+                entry = searcher.tp_score.get((new_pos, check_depth, True), None)
+                if entry is not None:
+                    # Only use TT if bounds are tight
+                    bound_width = entry.upper - entry.lower
+                    if bound_width < 1000:
+                        score = -((entry.lower + entry.upper) // 2)
+                        break
+
+            # If not in TT with good bounds, do shallow search
+            if score is None and shallow_depth > 0:
+                try:
+                    score = -searcher.bound(new_pos, 0, shallow_depth, can_null=True)
+                except Exception as e:
+                    logger.debug(f"Shallow search failed for {move_str}: {e}")
+                    score = quick_score  # Fallback to quick score
+            elif score is None:
+                score = quick_score
+
+            scored_moves.append((move_str, score))
+
+        # Step 3d: Final sort and trim to exact top_n
+        scored_moves.sort(key=lambda x: x[1], reverse=True)
+        scored_moves = scored_moves[:top_n]
+
+    # 4) Send scored moves to callback
     callbackMove(scored_moves)
-    my_pv = pv(searcher, hist[-1], include_scores=True)        
+
+    # 5) Print best move
+    my_pv = pv(searcher, hist[-1], include_scores=True)
 
     if my_pv and len(my_pv) >= 3:
         bestmove_str = my_pv[1]
@@ -108,8 +194,8 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
         logger.debug('Fallback move')
         logger.debug(scored_moves[0])
         print("bestmove", scored_moves[0][0], "score", scored_moves[0][1], flush=True)
-    else:   
-        logger.debug('NO mOVE AT ALL 2')
+    else:
+        logger.debug('NO MOVE AT ALL')
         logger.debug('MOVES')
         logger.debug(move_list)
         print("bestmove (none)", flush=True)
@@ -289,7 +375,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                     print("legal moves:", " ".join(moves_uci), flush=True)
 
                 elif args[0] == "go":
-                    
+
                     think = 10**6
                     max_depth = 8
                     loop = go_loop
@@ -318,11 +404,21 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                         max_depth = int(args[2])
                         loop = partial(mate_loop, find_draw=args[1] == "draw")
 
+                    # Parse optional parameters (can appear in any order)
                     precision = 0
-                    if args[3] == "precision":
-                        precision = args[4]
-                    setattr(searcher, 'precision', float(precision))
+                    top_n = 10  # Default: return top 10 moves
 
+                    if "precision" in args:
+                        idx = args.index("precision")
+                        if idx + 1 < len(args):
+                            precision = args[idx + 1]
+
+                    if "top_n" in args:
+                        idx = args.index("top_n")
+                        if idx + 1 < len(args):
+                            top_n = int(args[idx + 1])
+
+                    setattr(searcher, 'precision', float(precision))
 
                     do_stop_event.clear()
                     go_future = executor.submit(
@@ -333,7 +429,8 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                         think,
                         max_depth,
                         debug=debug,
-                        callbackMove=callbackMove
+                        callbackMove=callbackMove,
+                        top_n=top_n
                     )
 
                     # Make sure we get informed if the job fails

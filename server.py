@@ -163,9 +163,9 @@ def bestmove_endpoint():
     """
     Get the best move for the current position.
     Request JSON:
-      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int> }
+      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int>, "top_n": <int> }
     Response JSON:
-      { "bestmove": "<move>" }
+      { "bestmove": "<move>", "score": "<score>", "check": <bool>, "allmoves": [...] }
     """
     data = request.get_json()
     if not data or "fen" not in data:
@@ -181,12 +181,14 @@ def bestmove_endpoint():
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
     precision = data.get("precision", None)
+    top_n = data.get("top_n", 10)  # Default: return top 10 moves
     moves_history = data.get("moves", "").lower()
 
     logger.debug(f"Received FEN: {fen}")
     logger.debug(f"Received movetime: {movetime}")
     logger.debug(f"Received maxdepth: {maxdepth}")
     logger.debug(f"Received precision: {precision}")
+    logger.debug(f"Received top_n: {top_n}")
     logger.debug(f"Received moves history: {moves_history}")
 
     go_command = "go"
@@ -198,6 +200,7 @@ def bestmove_endpoint():
         go_command += " depth 8"
 
     go_command += f" precision {precision if precision else 0}"
+    go_command += f" top_n {top_n}"
 
     # Build the position command with moves history.
     position_command = f"position fen {fen}"
