@@ -115,6 +115,7 @@ Returns the best move(s) for current position with evaluation.
   "maxdepth": <int>,              // optional (default: 8)
   "precision": <float>,           // optional (default: 0)
   "top_n": <int>,                 // optional (default: 10)
+  "ignore_squares": ["e2", "g1"], // optional, squares to ignore
   "moves": "<move_history>"       // optional, space-separated moves
 }
 ```
@@ -141,9 +142,13 @@ Returns the best move(s) for current position with evaluation.
 - **top_n parameter**: Number of moves to return in `allmoves` (default: 10)
   - `top_n=1`: Fast path, returns only best move (zero overhead)
   - `top_n>1`: Returns top N moves with TT + shallow search evaluation
+- **ignore_squares parameter**: List of squares whose pieces should be ignored (e.g., `["e2", "g1"]`)
+  - Useful for training mode, puzzles, or analysis
+  - Filters out all moves originating from specified squares
+  - Best move automatically switches to next best if ignored
 - Returns moves sorted by **search-based scores** (not static eval)
 - **Precision parameter**: Adds artificial noise to weaken the engine (see Precision Parameter section below)
-- See "Top-N Move Evaluation" section for implementation details
+- See "Top-N Move Evaluation" and "Ignore Squares" sections for implementation details
 
 ### 3. POST `/ischeck`
 Checks if the active player is currently in check.
@@ -366,6 +371,81 @@ for move in top_candidates:
 | Positional understanding | Basic | Very good |
 | Time overhead | 0% | 0-30% (depends on top_n) |
 | Best move quality | Same | Same (from main search) |
+
+### Ignore Squares: Piece-Level Move Filtering
+
+The `ignore_squares` parameter allows you to exclude specific pieces from move consideration, creating constrained search scenarios.
+
+**Use Cases**:
+1. **Training Mode**: Force players to develop specific pieces
+2. **Puzzle Mode**: Create scenarios where only certain pieces can move
+3. **Analysis**: "What's the best move if I can't use my queen?"
+4. **Game Variants**: Implement rules that restrict piece movement
+
+**How It Works** (tools/uci.py:88-118):
+
+```python
+# Step 1: Parse squares to indices
+ignored_indices = set()
+for square_str in ignore_squares:  # e.g., ["e2", "g1"]
+    idx = sunfish.parse(square_str)  # Convert to board index
+    if not white_pov:
+        idx = 119 - idx  # Flip for black's perspective
+    ignored_indices.add(idx)
+
+# Step 2: Filter legal moves
+legal_moves = [m for m in legal_moves if m.i not in ignored_indices]
+
+# Step 3: Override bestmove if necessary
+if bestmove_from in ignore_squares:
+    bestmove = scored_moves[0][0]  # Use top allowed move
+```
+
+**Example API Usage**:
+
+```bash
+# Ignore both knights in starting position
+curl -X POST http://localhost:5500/bestmove \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "maxdepth": 6,
+    "ignore_squares": ["g1", "b1"]
+  }'
+
+# Response will exclude knight moves, return best pawn move instead
+{
+  "bestmove": "d2d4",  # Best non-knight move
+  "allmoves": [
+    ["d2d4", 33],
+    ["e2e3", 22],
+    ["d2d3", 13]
+    // No g1f3 or b1c3
+  ]
+}
+```
+
+**Behavior Details**:
+
+- **Filtering Stage**: Happens after legal move generation, before search
+- **Complete Removal**: Ignored pieces are completely excluded from consideration
+- **Best Move Override**: If PV best move is ignored, uses top scored move
+- **Performance**: No significant overhead (just list filtering)
+- **Coordinate System**: Handles white/black perspective automatically
+
+**Edge Cases**:
+
+1. **All moves ignored**: Returns `bestmove: (none)`
+2. **Invalid square names**: Logged as warning, ignored gracefully
+3. **Empty list**: No filtering applied
+4. **Case insensitive**: "E2" and "e2" both work
+
+**Implementation Notes**:
+
+- Filtering happens in `go_loop()`, not in move generation
+- Main search still runs normally on filtered move list
+- Both `bestmove` and `allmoves` respect the filter
+- Compatible with all other parameters (`top_n`, `precision`, etc.)
 
 ### Stateless History Tracking
 

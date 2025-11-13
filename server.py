@@ -163,7 +163,7 @@ def bestmove_endpoint():
     """
     Get the best move for the current position.
     Request JSON:
-      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int>, "top_n": <int> }
+      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int>, "top_n": <int>, "ignore_squares": ["e2", "g1"] }
     Response JSON:
       { "bestmove": "<move>", "score": "<score>", "check": <bool>, "allmoves": [...] }
     """
@@ -182,6 +182,7 @@ def bestmove_endpoint():
     maxdepth = data.get("maxdepth", None)
     precision = data.get("precision", None)
     top_n = data.get("top_n", 10)  # Default: return top 10 moves
+    ignore_squares = data.get("ignore_squares", [])  # Squares to ignore (e.g., ["e2", "g1"])
     moves_history = data.get("moves", "").lower()
 
     logger.debug(f"Received FEN: {fen}")
@@ -189,6 +190,7 @@ def bestmove_endpoint():
     logger.debug(f"Received maxdepth: {maxdepth}")
     logger.debug(f"Received precision: {precision}")
     logger.debug(f"Received top_n: {top_n}")
+    logger.debug(f"Received ignore_squares: {ignore_squares}")
     logger.debug(f"Received moves history: {moves_history}")
 
     go_command = "go"
@@ -201,6 +203,12 @@ def bestmove_endpoint():
 
     go_command += f" precision {precision if precision else 0}"
     go_command += f" top_n {top_n}"
+
+    # Add ignore_squares if provided
+    if ignore_squares and len(ignore_squares) > 0:
+        # Convert list to comma-separated string
+        ignore_str = ",".join([sq.lower() for sq in ignore_squares])
+        go_command += f" ignore {ignore_str}"
 
     # Build the position command with moves history.
     position_command = f"position fen {fen}"

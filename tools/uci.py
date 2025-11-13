@@ -41,9 +41,9 @@ def parse_move(move_str, white_pov):
         i, j = 119 - i, 119 - j
     return sunfish.Move(i, j, prom)
 
-def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None, top_n=10):
+def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None, top_n=10, ignore_squares=[]):
     if debug:
-        logger.debug(f"Going movetime={max_movetime}, depth={max_depth}, top_n={top_n}")
+        logger.debug(f"Going movetime={max_movetime}, depth={max_depth}, top_n={top_n}, ignore_squares={ignore_squares}")
 
     start = time.time()
     best_move = None
@@ -85,8 +85,35 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
     move_list = list(pos.gen_moves())
     legal_moves = [m for m in move_list if not can_kill_king(pos.move(m))]
 
+    # Filter out moves from ignored squares
+    if ignore_squares and len(ignore_squares) > 0:
+        # Convert ignored squares (algebraic notation) to board indices
+        # Note: Board is always from white's perspective internally
+        white_pov = len(hist) % 2 == 1
+        ignored_indices = set()
+
+        for square_str in ignore_squares:
+            try:
+                # Parse the algebraic square (e.g., "e2")
+                idx = sunfish.parse(square_str)
+                # If we're viewing from black's perspective, flip the index
+                if not white_pov:
+                    idx = 119 - idx
+                ignored_indices.add(idx)
+                logger.debug(f"Ignoring square {square_str} (index {idx})")
+            except Exception as e:
+                logger.warning(f"Failed to parse ignore square '{square_str}': {e}")
+
+        # Filter out moves that start from ignored squares
+        original_count = len(legal_moves)
+        legal_moves = [m for m in legal_moves if m.i not in ignored_indices]
+        filtered_count = original_count - len(legal_moves)
+
+        if filtered_count > 0:
+            logger.debug(f"Filtered out {filtered_count} moves from ignored squares")
+
     if not legal_moves:
-        # No legal moves = STALEMATE or MATE
+        # No legal moves = STALEMATE or MATE (or all moves filtered out)
         print("bestmove", "(none)", flush=True)
         return
 
@@ -182,18 +209,40 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
     # 5) Print best move
     my_pv = pv(searcher, hist[-1], include_scores=True)
 
-    if my_pv and len(my_pv) >= 3:
-        bestmove_str = my_pv[1]
-        score_str    = my_pv[2]
-        print("bestmove", bestmove_str, "score", int(score_str) - pos.score, flush=True)
-    elif my_pv and len(my_pv) == 2:
-        # We have only ["<score>", "<move>"]
-        bestmove_str = my_pv[1]
-        print("bestmove", bestmove_str, flush=True)
-    elif len(scored_moves) > 0:
-        logger.debug('Fallback move')
-        logger.debug(scored_moves[0])
-        print("bestmove", scored_moves[0][0], "score", scored_moves[0][1], flush=True)
+    # Check if best move from PV is in ignored squares
+    bestmove_str = None
+    bestmove_score = None
+
+    if my_pv and len(my_pv) >= 2:
+        potential_best = my_pv[1]
+        move_from = potential_best[:2]
+
+        # Check if this move is from an ignored square
+        is_ignored = False
+        if ignore_squares and len(ignore_squares) > 0:
+            is_ignored = move_from in ignore_squares
+
+        if not is_ignored:
+            # Use the PV best move
+            bestmove_str = potential_best
+            if len(my_pv) >= 3:
+                bestmove_score = int(my_pv[2]) - pos.score
+        else:
+            # Best move is ignored, use top scored_move instead
+            logger.debug(f"Best move {potential_best} is from ignored square {move_from}")
+
+    # If bestmove is None (either no PV or PV move was ignored), use scored_moves
+    if bestmove_str is None and len(scored_moves) > 0:
+        logger.debug('Using top scored move as best move')
+        bestmove_str = scored_moves[0][0]
+        bestmove_score = scored_moves[0][1]
+
+    # Print the best move
+    if bestmove_str:
+        if bestmove_score is not None:
+            print("bestmove", bestmove_str, "score", bestmove_score, flush=True)
+        else:
+            print("bestmove", bestmove_str, flush=True)
     else:
         logger.debug('NO MOVE AT ALL')
         logger.debug('MOVES')
@@ -407,6 +456,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                     # Parse optional parameters (can appear in any order)
                     precision = 0
                     top_n = 10  # Default: return top 10 moves
+                    ignore_squares = []  # Squares to ignore (e.g., ["e2", "g1"])
 
                     if "precision" in args:
                         idx = args.index("precision")
@@ -417,6 +467,14 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                         idx = args.index("top_n")
                         if idx + 1 < len(args):
                             top_n = int(args[idx + 1])
+
+                    if "ignore" in args:
+                        idx = args.index("ignore")
+                        if idx + 1 < len(args):
+                            # Parse comma-separated squares (e.g., "e2,g1,b1")
+                            ignore_str = args[idx + 1]
+                            ignore_squares = [sq.strip() for sq in ignore_str.split(",")]
+                            logger.debug(f"Ignoring squares: {ignore_squares}")
 
                     setattr(searcher, 'precision', float(precision))
 
@@ -430,7 +488,8 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                         max_depth,
                         debug=debug,
                         callbackMove=callbackMove,
-                        top_n=top_n
+                        top_n=top_n,
+                        ignore_squares=ignore_squares
                     )
 
                     # Make sure we get informed if the job fails
