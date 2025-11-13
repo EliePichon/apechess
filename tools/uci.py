@@ -455,7 +455,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
 
                     # Parse optional parameters (can appear in any order)
                     precision = 0
-                    top_n = 10  # Default: return top 10 moves
+                    top_n = 1  # Default: return only best move (fast)
                     ignore_squares = []  # Squares to ignore (e.g., ["e2", "g1"])
 
                     if "precision" in args:

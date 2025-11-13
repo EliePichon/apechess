@@ -161,11 +161,12 @@ def get_moves_endpoint():
 @app.route("/bestmove", methods=["POST"])
 def bestmove_endpoint():
     """
-    Get the best move for the current position.
+    Get the best move(s) for the current position.
     Request JSON:
-      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int>, "top_n": <int>, "ignore_squares": ["e2", "g1"] }
+      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int>, "top_n": <int> (default: 1), "ignore_squares": ["e2", "g1"] }
     Response JSON:
-      { "bestmove": "<move>", "score": "<score>", "check": <bool>, "allmoves": [...] }
+      { "bestmoves": [["e2e4", 45], ...], "check": <bool> }
+    Note: bestmoves array length equals top_n. Use top_n > 1 to get multiple moves. Default top_n=1 for maximum performance.
     """
     data = request.get_json()
     if not data or "fen" not in data:
@@ -181,7 +182,7 @@ def bestmove_endpoint():
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
     precision = data.get("precision", None)
-    top_n = data.get("top_n", 10)  # Default: return top 10 moves
+    top_n = data.get("top_n", 1)  # Default: return only best move (fast)
     ignore_squares = data.get("ignore_squares", [])  # Squares to ignore (e.g., ["e2", "g1"])
     moves_history = data.get("moves", "").lower()
 
@@ -226,9 +227,9 @@ def bestmove_endpoint():
         # Process the bestmove line (expected format like "bestmove f2f1q score 735").
         parts = bestmove_line.split()
         bestmove = parts[1] if len(parts) > 1 else "(none)"
-        score = parts[3] if len(parts) > 3 else "(none)"
+
         if bestmove == "(none)":
-            return jsonify({"bestmove": "(none)"})
+            return jsonify({"bestmoves": [], "check": False})
 
         # Determine the effective side.
         num_moves = len(moves_history.split()) if moves_history.strip() != "" else 0
@@ -253,7 +254,7 @@ def bestmove_endpoint():
 
         is_check = uci.can_kill_king(new_position.rotate())
 
-        return jsonify({"bestmove": bestmove, "score": score, "check": is_check, "allmoves": moves})
+        return jsonify({"bestmoves": moves, "check": is_check})
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
         return jsonify({"error": "Engine timed out while computing best move"}), 504

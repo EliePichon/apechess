@@ -114,7 +114,7 @@ Returns the best move(s) for current position with evaluation.
   "movetime": <milliseconds>,    // optional
   "maxdepth": <int>,              // optional (default: 8)
   "precision": <float>,           // optional (default: 0)
-  "top_n": <int>,                 // optional (default: 10)
+  "top_n": <int>,                 // optional (default: 1)
   "ignore_squares": ["e2", "g1"], // optional, squares to ignore
   "moves": "<move_history>"       // optional, space-separated moves
 }
@@ -123,30 +123,29 @@ Returns the best move(s) for current position with evaluation.
 **Response**:
 ```json
 {
-  "bestmove": "e2e4",
-  "score": "23",
-  "check": false,
-  "allmoves": [
+  "bestmoves": [
     ["e2e4", 45],
     ["d2d4", 42],
     ["g1f3", 38],
-    ["b1c3", 35],
-    ...
-  ]
+    ["b1c3", 35]
+  ],
+  "check": false
 }
 ```
 
 **Implementation Notes**:
 - Tracks move history to determine effective side (white/black)
 - Uses iterative deepening search for best move
-- **top_n parameter**: Number of moves to return in `allmoves` (default: 10)
+- **top_n parameter**: Number of moves to return in `bestmoves` array (default: 1)
   - `top_n=1`: Fast path, returns only best move (zero overhead)
   - `top_n>1`: Returns top N moves with TT + shallow search evaluation
 - **ignore_squares parameter**: List of squares whose pieces should be ignored (e.g., `["e2", "g1"]`)
   - Useful for training mode, puzzles, or analysis
   - Filters out all moves originating from specified squares
   - Best move automatically switches to next best if ignored
-- Returns moves sorted by **search-based scores** (not static eval)
+- Returns moves in `bestmoves` array, sorted by **search-based scores** (not static eval)
+- Array length always equals `top_n`
+- Access best move as `bestmoves[0][0]`, best score as `bestmoves[0][1]`
 - **Precision parameter**: Adds artificial noise to weaken the engine (see Precision Parameter section below)
 - See "Top-N Move Evaluation" and "Ignore Squares" sections for implementation details
 
@@ -415,13 +414,13 @@ curl -X POST http://localhost:5500/bestmove \
 
 # Response will exclude knight moves, return best pawn move instead
 {
-  "bestmove": "d2d4",  # Best non-knight move
-  "allmoves": [
+  "bestmoves": [
     ["d2d4", 33],
     ["e2e3", 22],
     ["d2d3", 13]
     // No g1f3 or b1c3
-  ]
+  ],
+  "check": false
 }
 ```
 
@@ -444,7 +443,7 @@ curl -X POST http://localhost:5500/bestmove \
 
 - Filtering happens in `go_loop()`, not in move generation
 - Main search still runs normally on filtered move list
-- Both `bestmove` and `allmoves` respect the filter
+- All moves in `bestmoves` array respect the filter
 - Compatible with all other parameters (`top_n`, `precision`, etc.)
 
 ### Stateless History Tracking
