@@ -125,19 +125,13 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
         best_move_obj = searcher.tp_move.get(hist[-1])
         if best_move_obj:
             move_str = render_move(best_move_obj, len(hist) % 2 == 1)
-            # Get score from PV or transposition table
-            my_pv = pv(searcher, hist[-1], include_scores=True)
-            if len(my_pv) >= 3:
-                score = int(my_pv[2]) - pos.score
-            else:
-                score = pos.value(best_move_obj)
-            scored_moves = [(move_str, score)]
+            # Score will be calculated from PV later (line 210)
+            scored_moves = [(move_str, 0)]  # Placeholder score
         elif len(legal_moves) > 0:
             # Fallback: use first legal move
             move = legal_moves[0]
             move_str = render_move(move, len(hist) % 2 == 1)
-            score = pos.value(move)
-            scored_moves = [(move_str, score)]
+            scored_moves = [(move_str, 0)]  # Placeholder score
 
     # STANDARD PATH: Multi-move evaluation using TT + shallow search
     else:
@@ -163,18 +157,20 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
             if score is None:
                 score = pos.value(move)
 
-            quick_scored.append((move, move_str, score))
+            # Cache new_pos to avoid recalculating in step 3c
+            quick_scored.append((move, move_str, score, new_pos))
 
         # Step 3b: Sort by quick scores and select top candidates
         quick_scored.sort(key=lambda x: x[2], reverse=True)
-        # Take top_n + 5 as buffer to ensure we get quality moves
-        top_candidates = quick_scored[:min(top_n + 5, len(quick_scored))]
+        # Use adaptive buffer: smaller buffer for small top_n to reduce overhead
+        buffer_size = min(5, max(2, top_n // 2))
+        top_candidates = quick_scored[:min(top_n + buffer_size, len(quick_scored))]
 
-        # Step 3c: Deep evaluation for top candidates
+        # Step 3c: Deep evaluation for top candidates only
         shallow_depth = max(3, final_depth - 3)  # Shallow search depth
 
-        for move, move_str, quick_score in top_candidates:
-            new_pos = pos.move(move)
+        for move, move_str, quick_score, new_pos in top_candidates:
+            # Reuse cached new_pos from step 3a
 
             # Check if we already have a good TT entry (high depth with tight bounds)
             score = None
@@ -203,11 +199,19 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
         scored_moves.sort(key=lambda x: x[1], reverse=True)
         scored_moves = scored_moves[:top_n]
 
-    # 4) Send scored moves to callback
+    # 4) Calculate PV for scoring
+    my_pv = pv(searcher, hist[-1], include_scores=True)
+
+    # Update score for top_n=1 fast path
+    if top_n == 1 and len(scored_moves) > 0 and scored_moves[0][1] == 0:
+        if len(my_pv) >= 3:
+            score = int(my_pv[2]) - pos.score
+            scored_moves = [(scored_moves[0][0], score)]
+
+    # Send scored moves to callback
     callbackMove(scored_moves)
 
     # 5) Print best move
-    my_pv = pv(searcher, hist[-1], include_scores=True)
 
     # Check if best move from PV is in ignored squares
     bestmove_str = None
@@ -323,7 +327,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
     global sunfish
     sunfish = sunfish_module
 
-    debug = True
+    debug = False
     hist = [startpos]
     searcher = sunfish.Searcher()
         

@@ -151,51 +151,6 @@ class TrainingMode {
 
 ---
 
-## Combining Features
-
-```javascript
-// Adaptive difficulty system
-async function getAdaptiveMoveHint(fen, difficulty, playerHistory) {
-  const config = {
-    fen: fen,
-    maxdepth: difficulty === 'easy' ? 4 : difficulty === 'medium' ? 6 : 8,
-    top_n: 3  // Always show 3 alternatives
-  };
-
-  // Medium/Hard: Exclude overused pieces
-  if (difficulty !== 'easy') {
-    const overusedSquares = findOverusedPieces(playerHistory);
-    config.ignore_squares = overusedSquares;
-  }
-
-  // Hard: Add randomness
-  if (difficulty === 'hard') {
-    config.precision = 0.15;
-  }
-
-  const result = await fetch('/bestmove', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config)
-  }).then(r => r.json());
-
-  return result;
-}
-
-function findOverusedPieces(history) {
-  // Find pieces used more than 3 times in last 10 moves
-  const usage = {};
-  history.slice(-10).forEach(move => {
-    const from = move.substring(0, 2);
-    usage[from] = (usage[from] || 0) + 1;
-  });
-
-  return Object.keys(usage).filter(sq => usage[sq] > 3);
-}
-```
-
----
-
 ## Quick Reference
 
 ### TypeScript Interface
