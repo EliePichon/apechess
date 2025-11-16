@@ -36,7 +36,7 @@ class BlockingInput:
         """Required for Werkzeug reloader compatibility."""
         return False
 
-def run_uci_session(commands, expected_response=None, timeout=25):
+def run_uci_session(commands, expected_response=None, timeout=60):
     """
     Run a new UCI session, send commands, and capture the response.
 

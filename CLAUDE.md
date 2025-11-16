@@ -615,10 +615,14 @@ sunfish/
 ├── sunfish_nnue.py         # Experimental NNUE version
 ├── server.py               # Flask REST API wrapper
 ├── requirements.txt        # Dependencies: chess, tqdm, Flask-Cors
+├── Makefile                # Convenient commands for dev/testing
 ├── Dockerfile              # Production container config
 ├── Dockerfile.local        # Development container config
 ├── docker-compose.yml      # Docker Compose for local dev
 ├── .gitlab-ci.yml          # CI/CD pipeline configuration
+├── test_top_n.py          # Tests for top_n feature
+├── test_ignore_squares.py # Tests for ignore_squares feature
+├── test_performance.py    # Performance benchmarks
 ├── tools/
 │   ├── uci.py             # UCI protocol implementation
 │   ├── fancy.py           # Terminal interface for playing
@@ -709,28 +713,49 @@ else:
 
 ### Running Tests
 ```bash
-# Quick smoke tests
+# Start dev server and run all tests
+make up && make test
+
+# Individual test suites
+make test-top-n      # Test top_n feature
+make test-ignore     # Test ignore_squares feature
+
+# View server logs
+make logs
+
+# Legacy commands (if needed)
 tools/quick_tests.sh
-
-# Full test suite
 python tools/tester.py
-
-# Play against engine
 tools/fancy.py -cmd ./sunfish.py
 ```
 
+### Available Make Commands
+- `make up` - Start dev server in Docker (http://localhost:5500)
+- `make down` - Stop server
+- `make test` - Run all API tests
+- `make test-top-n` - Test multiple best moves feature
+- `make test-ignore` - Test ignore squares feature
+- `make test-perf` - Run performance benchmarks
+- `make logs` - View server logs in real-time
+- `make help` - Show all available commands
+
 ### Test Files
-- `tools/test_files/` contains various test positions
-- FEN strings for edge cases (mate, stalemate, promotion, etc.)
+- `test_top_n.py` - Tests for top_n parameter and multi-move evaluation
+- `test_ignore_squares.py` - Tests for ignore_squares filtering
+- `test_performance.py` - Performance benchmarks for different configurations
+- `tools/test_files/` - Legacy test positions (FEN strings for edge cases)
 
 ## Deployment
 
 ### Local Development
 ```bash
-# With Docker Compose
+# Recommended: Use Makefile
+make up
+
+# Alternative: Docker Compose directly
 docker-compose up
 
-# Direct Python
+# Alternative: Direct Python
 pip install -r requirements.txt
 python server.py
 ```

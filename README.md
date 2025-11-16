@@ -88,12 +88,75 @@ In contrast to the large NNUE in say, Stockfish, this network is only 1207 bytes
 That makes sure sunfish NNUE can still be packed into less than 4KB.
 Using NNUE, sunfish will play better positionally, but worse tactically, since the implementation is still not fast enough.
 
+# REST API Server
+
+This fork includes a REST API server for easy integration with web applications.
+
+## Quick Start
+
+```bash
+# Start the development server
+make up
+
+# Run tests
+make test
+
+# View logs
+make logs
+
+# Stop server
+make down
+```
+
+Available commands:
+- `make up` - Start dev server in Docker (http://localhost:5500)
+- `make test` - Run all tests
+- `make test-top-n` - Test top_n feature
+- `make test-ignore` - Test ignore_squares feature
+- `make logs` - View server logs
+- `make down` - Stop server
+- `make help` - Show all commands
+
+## API Endpoints
+
+### GET /getmoves
+Get all legal moves for a position.
+
+**Request**: `{"fen": "<fen_string>"}`
+
+**Response**: `{"moves": {"e2": ["e2e4", "e2e3"], ...}, "check": false}`
+
+### POST /bestmove
+Get best move(s) for a position.
+
+**Request**:
+```json
+{
+  "fen": "<fen_string>",
+  "maxdepth": 6,
+  "top_n": 5,
+  "ignore_squares": ["e2", "g1"]
+}
+```
+
+**Response**: `{"bestmoves": [["e2e4", 45], ["d2d4", 42]], "check": false}`
+
+### POST /ischeck
+Check if current player is in check.
+
+**Request**: `{"fen": "<fen_string>"}`
+
+**Response**: `{"check": true}`
+
+See `FRONTEND_GUIDE.md` for detailed API documentation.
+
 # Features
 
 1. Built around the simple, but efficient MTD-bi search algorithm, also known as [C*](https://www.chessprogramming.org/NegaC*).
 2. Filled with classic "chess engine tricks" for simpler and faster code.
 3. Efficiently updatedable evaluation function through [Piece Square Tables](https://www.chessprogramming.org/Piece-Square_Tables).
 4. Uses standard Python collections and data structures for clarity and efficiency.
+5. REST API for easy integration with web applications.
 
 # Limitations
 
