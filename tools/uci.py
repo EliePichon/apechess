@@ -124,9 +124,16 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
     if top_n == 1:
         best_move_obj = searcher.tp_move.get(hist[-1])
         if best_move_obj:
-            move_str = render_move(best_move_obj, len(hist) % 2 == 1)
-            # Score will be calculated from PV later (line 210)
-            scored_moves = [(move_str, 0)]  # Placeholder score
+            # Check if this move is in the legal_moves (which already filtered ignored squares)
+            if best_move_obj in legal_moves:
+                move_str = render_move(best_move_obj, len(hist) % 2 == 1)
+                # Score will be calculated from PV later (line 210)
+                scored_moves = [(move_str, 0)]  # Placeholder score
+            elif len(legal_moves) > 0:
+                # Best move is ignored, use first legal move instead
+                move = legal_moves[0]
+                move_str = render_move(move, len(hist) % 2 == 1)
+                scored_moves = [(move_str, 0)]  # Placeholder score
         elif len(legal_moves) > 0:
             # Fallback: use first legal move
             move = legal_moves[0]

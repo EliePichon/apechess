@@ -104,6 +104,39 @@ def main():
         "Starting position - ignore likely best move (g1 knight)"
     )
 
+    # Test 5: Regression test for fast-path bug (top_n=1)
+    # This tests the bug where ignored squares were not filtered in fast path
+    print(f"\n{'='*70}")
+    print(f"Test: Regression test for fast-path bug (top_n=1)")
+    print(f"Testing specific case where d2, d1, e1 are ignored")
+    print(f"{'='*70}")
+
+    regression_fen = "3kb3/3pp3/8/8/8/8/3P4/2NBK3 w KQkq - 0 1"
+    regression_payload = {
+        "fen": regression_fen,
+        "maxdepth": 9,
+        "top_n": 1,
+        "ignore_squares": ["d2", "d1", "e1"]
+    }
+
+    response = requests.post(f"{BASE_URL}/bestmove", json=regression_payload)
+    if response.status_code == 200:
+        data = response.json()
+        bestmoves = data.get('bestmoves', [])
+        if bestmoves:
+            best_move = bestmoves[0][0]
+            move_from = best_move[:2]
+            print(f"\n✓ Best move: {best_move} (from {move_from})")
+
+            if move_from in regression_payload['ignore_squares']:
+                print(f"✗ REGRESSION FAIL: Move {best_move} starts from ignored square {move_from}!")
+            else:
+                print(f"✓ PASS: Move does not start from ignored squares")
+        else:
+            print("✗ No bestmoves returned")
+    else:
+        print(f"✗ Error: {response.status_code}")
+
     print("\n" + "="*70)
     print("All tests completed!")
     print("="*70)
