@@ -75,7 +75,9 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
 
         # We may not have a move yet at depth = 1
         if depth > 1:
-            if elapsed > max_movetime * 2 / 3:
+            time_budget = max_movetime * 2 / 3
+            if max_movetime > 0 and elapsed > time_budget:
+                logger.debug(f"Time limit reached: {elapsed:.2f}s > {time_budget:.2f}s (budget: {max_movetime:.2f}s)")
                 break
             if stop_event.is_set():
                 break
@@ -248,12 +250,12 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
         bestmove_str = scored_moves[0][0]
         bestmove_score = scored_moves[0][1]
 
-    # Print the best move
+    # Print the best move with depth information
     if bestmove_str:
         if bestmove_score is not None:
-            print("bestmove", bestmove_str, "score", bestmove_score, flush=True)
+            print("bestmove", bestmove_str, "score", bestmove_score, "depth", final_depth, flush=True)
         else:
-            print("bestmove", bestmove_str, flush=True)
+            print("bestmove", bestmove_str, "depth", final_depth, flush=True)
     else:
         logger.debug('NO MOVE AT ALL')
         logger.debug('MOVES')

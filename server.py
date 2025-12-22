@@ -13,6 +13,9 @@ from flask_cors import CORS
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# Global lock to serialize UCI sessions (prevent concurrent sys.stdin/stdout conflicts)
+uci_lock = threading.Lock()
+
 # Flask app
 app = Flask(__name__)
 CORS(app,
@@ -37,65 +40,70 @@ class BlockingInput:
         return False
 
 def run_uci_session(commands, expected_response=None, timeout=60):
-    """
-    Run a new UCI session, send commands, and capture the response.
+    """Run UCI session with thread-safe stdin/stdout redirection."""
+    # Serialize sessions to prevent concurrent stdin/stdout conflicts
+    with uci_lock:
+        logger.debug(f"Acquired UCI lock. Starting session... commands: {commands}")
 
-    Args:
-        commands (list[str]): A list of UCI commands to send.
-        expected_response (str): Prefix of the expected response.
-        timeout (int): Maximum wait time for the response in seconds.
+        input_stream = BlockingInput()
+        output_stream = StringIO()
+        callback_holder = {"position": None, "moves": None}  # Shared object to hold the Position object
 
-    Returns:
-        list[str]: Lines of response from the UCI loop.
-    """
-    input_stream = BlockingInput()
-    output_stream = StringIO()
-    callback_holder = {"position": None, "moves": None}  # Shared object to hold the Position object
+        def uci_loop():
+            sys.stdin = input_stream
+            sys.stdout = output_stream
+            startpos = sunfish.Position(
+                sunfish.initial, 0, (True, True), (True, True), 0, 0
+            )
 
-    logger.debug(f"Starting UCI session... commands: {commands}")
-    def uci_loop():
-        sys.stdin = input_stream
-        sys.stdout = output_stream
-        startpos = sunfish.Position(
-            sunfish.initial, 0, (True, True), (True, True), 0, 0
-        )
-        
-        try:
-            uci.run(sunfish, startpos, callbackPos=lambda pos: callback_holder.update({'position':pos}), callbackMove=lambda moves: callback_holder.update({'moves': moves}))
-        except Exception as e:
-            logger.error(f"UCI loop error: {e}")
-        finally:
-            logger.debug("UCI loop terminated.")
+            try:
+                uci.run(sunfish, startpos, callbackPos=lambda pos: callback_holder.update({'position':pos}), callbackMove=lambda moves: callback_holder.update({'moves': moves}))
+            except Exception as e:
+                logger.error(f"UCI loop error: {e}")
+            finally:
+                logger.debug("UCI loop terminated.")
 
-    thread = threading.Thread(target=uci_loop, daemon=True)
-    thread.start()
+        thread = threading.Thread(target=uci_loop, daemon=True)
+        thread.start()
 
-    # Send commands
-    for cmd in commands:
-        input_stream.write(cmd + "\n")
+        # Send commands
+        for cmd in commands:
+            input_stream.write(cmd + "\n")
 
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        output_stream.seek(0)
-        response = output_stream.read().strip().split("\n")
+        start_time = time.time()
+        last_output_check = ""
 
-        if expected_response:
-            filtered_response = [line for line in response if line.startswith(expected_response)]
-            if filtered_response:
+        while time.time() - start_time < timeout:
+            output_stream.seek(0)
+            current_output = output_stream.read().strip()
+            response = current_output.split("\n")
+
+            if current_output != last_output_check:
+                logger.debug(f"UCI output update: {current_output[-200:]}")
+                last_output_check = current_output
+
+            if expected_response:
+                filtered_response = [line for line in response if line.startswith(expected_response)]
+                if filtered_response:
+                    logger.debug(f"Found expected response: {filtered_response}")
+                    input_stream.write("quit\n")
+                    thread.join(timeout=20.0)
+                    return filtered_response, callback_holder
+
+            if not expected_response and response:
                 input_stream.write("quit\n")
                 thread.join(timeout=20.0)
-                return filtered_response, callback_holder
+                return response, callback_holder
 
-        if not expected_response and response:
-            input_stream.write("quit\n")
-            thread.join(timeout=20.0)
-            return response, callback_holder
+            time.sleep(0.1)
 
-        time.sleep(0.1)
-
-    input_stream.write("quit\n")
-    thread.join(timeout=20.0)
-    raise TimeoutError(f"UCI session timed out waiting for response: {expected_response}")
+        # Timeout - log and raise
+        output_stream.seek(0)
+        final_output = output_stream.read().strip()
+        logger.error(f"UCI timeout. Final output: {final_output}")
+        input_stream.write("quit\n")
+        thread.join(timeout=20.0)
+        raise TimeoutError(f"UCI session timed out waiting for response: {expected_response}")
 
 @app.route("/getmoves", methods=["POST"])
 def get_moves_endpoint():
@@ -218,18 +226,44 @@ def bestmove_endpoint():
 
     commands = [position_command, go_command]
     logger.debug(commands)
+
+    # Generous timeout: depth stages can overshoot movetime
+    if movetime:
+        uci_timeout = (movetime / 1000.0) * 2 + 15
+    else:
+        uci_timeout = 120
+
+    logger.debug(f"UCI timeout: {uci_timeout}s")
+
     try:
-        response, holder = run_uci_session(commands, expected_response="bestmove")
+        response, holder = run_uci_session(commands, expected_response="bestmove", timeout=uci_timeout)
         position = holder['position']
         moves = holder['moves']
         bestmove_line = response[0] if response else None
 
-        # Process the bestmove line (expected format like "bestmove f2f1q score 735").
+        logger.debug(f"Received: {bestmove_line}")
+
         parts = bestmove_line.split()
         bestmove = parts[1] if len(parts) > 1 else "(none)"
+        logger.debug(f"Parsed: {bestmove}")
+
+        # Extract depth
+        depth_reached = None
+        if "depth" in parts:
+            try:
+                depth_idx = parts.index("depth")
+                if depth_idx + 1 < len(parts):
+                    depth_reached = int(parts[depth_idx + 1])
+            except (ValueError, IndexError):
+                pass
 
         if bestmove == "(none)":
             return jsonify({"bestmoves": [], "check": False})
+
+        # Validate format
+        if len(bestmove) < 4:
+            logger.error(f"Invalid bestmove: '{bestmove}'")
+            return jsonify({"error": f"Invalid bestmove: '{bestmove}'"}), 500
 
         # Determine the effective side.
         num_moves = len(moves_history.split()) if moves_history.strip() != "" else 0
@@ -254,7 +288,11 @@ def bestmove_endpoint():
 
         is_check = uci.can_kill_king(new_position.rotate())
 
-        return jsonify({"bestmoves": moves, "check": is_check})
+        response_data = {"bestmoves": moves, "check": is_check}
+        if depth_reached is not None:
+            response_data["depth_reached"] = depth_reached
+
+        return jsonify(response_data)
     except TimeoutError as e:
         logger.error(f"Timeout error: {e}")
         return jsonify({"error": "Engine timed out while computing best move"}), 504

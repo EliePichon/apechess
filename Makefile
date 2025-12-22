@@ -1,4 +1,4 @@
-.PHONY: test test-top-n test-ignore test-perf help up down logs
+.PHONY: test test-top-n test-ignore test-perf test-depth test-movetime help up down logs
 
 # Default target
 help:
@@ -11,6 +11,8 @@ help:
 	@echo "  make test-top-n    - Run top_n feature tests"
 	@echo "  make test-ignore   - Run ignore_squares feature tests"
 	@echo "  make test-perf     - Run performance benchmarks"
+	@echo "  make test-depth    - Run depth performance analysis (15-20 min)"
+	@echo "  make test-movetime - Run movetime performance analysis (5-10 min)"
 	@echo ""
 
 # Start dev server
@@ -36,15 +38,31 @@ test: test-top-n test-ignore
 # Run top_n tests
 test-top-n:
 	@echo "Running top_n tests..."
-	python3 test_top_n.py
+	python3 tests/test_top_n.py
 
 # Run ignore_squares tests
 test-ignore:
 	@echo "Running ignore_squares tests..."
-	python3 test_ignore_squares.py
+	python3 tests/test_ignore_squares.py
 
 # Run performance benchmarks
 test-perf:
 	@echo "Running performance benchmarks..."
 	@echo "This may take a few minutes..."
-	python3 test_performance.py
+	python3 tests/test_performance.py
+
+# Run depth performance analysis
+test-depth:
+	@echo "Running depth performance analysis..."
+	@echo "Testing depths 8, 10, 12, 15 across 6 positions (early/mid/endgame)"
+	@echo "This will take 15-20 minutes..."
+	@echo ""
+	python3 tests/test_depth_performance.py
+
+# Run movetime performance analysis
+test-movetime:
+	@echo "Running movetime performance analysis..."
+	@echo "Testing movetimes 2s, 4s, 7s, 10s with maxdepth=25 across 6 positions"
+	@echo "This will take 5-10 minutes..."
+	@echo ""
+	python3 tests/test_movetime_performance.py
