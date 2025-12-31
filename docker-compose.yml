@@ -3,7 +3,7 @@ services:
   sunfish:
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ./Dockerfile.local
     # Mount local files into the container
     volumes:
       - ./server.py:/usr/src/app/server.py

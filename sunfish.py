@@ -4,6 +4,7 @@ from __future__ import print_function
 from itertools import count
 from collections import namedtuple
 import logging
+import random
 import tools.uci as uci
 
 
@@ -260,6 +261,11 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 score += pst[prom][j] - pst["P"][j]
             if j == self.ep:
                 score += pst["P"][119 - (j + S)]
+
+         # Then apply the random factor:
+        if hasattr(self, 'searcher') and self.searcher.precision > 0.0:
+            factor = random.uniform(1 - self.searcher.precision, 1 + self.searcher.precision)
+            score = int(score * factor)
         return score
 
     def get_legal_moves(self, square=None):
@@ -309,6 +315,9 @@ class Searcher:
             if gamma >  s* then s* <= r < gamma  (A better upper bound)
             if gamma <= s* then gamma <= r <= s* (A better lower bound) """
         self.nodes += 1
+        
+        setattr(pos, 'searcher', self)
+
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
         # calmness, and from this point on there is no difference in behaviour depending on
