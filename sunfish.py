@@ -26,7 +26,7 @@ version = "sunfish 2023"
 # That's pretty good given we have 64*6 = 384 values.
 # Though probably we could do better...
 # For one thing, they could easily all fit into int8.
-piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}
+piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000, "O": 0}
 pst = {
     'P': (   0,   0,   0,   0,   0,   0,   0,   0,
             78,  83,  86,  73, 102,  82,  85,  90,
@@ -76,6 +76,14 @@ pst = {
            -47, -42, -43, -79, -64, -32, -29, -32,
             -4,   3, -14, -50, -57, -18,  13,   4,
             17,  30,  -3, -14,   6,  -1,  40,  18),
+    'O': (   0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0),
 }
 # Pad tables and join piece and pst dictionaries
 for k, table in pst.items():
@@ -113,7 +121,8 @@ directions = {
     "B": (N+E, S+E, S+W, N+W),
     "R": (N, E, S, W),
     "Q": (N, E, S, W, N+E, S+E, S+W, N+W),
-    "K": (N, E, S, W, N+E, S+E, S+W, N+W)
+    "K": (N, E, S, W, N+E, S+E, S+W, N+W),
+    "O": ()  # Rocks don't move
 }
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
@@ -161,7 +170,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # as defined in the 'directions' map. The rays are broken e.g. by
         # captures or immediately in case of pieces such as knights.
         for i, p in enumerate(self.board):
-            if not p.isupper():
+            if not p.isupper() or p == 'O':
                 continue
             for d in directions[p]:
                 for j in count(i + d, d):
