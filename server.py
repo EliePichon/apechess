@@ -208,7 +208,7 @@ def bestmove_endpoint():
     elif maxdepth:
         go_command += f" depth {maxdepth}"
     else:
-        go_command += " depth 8"
+        go_command += " depth 15"
 
     go_command += f" precision {precision if precision else 0}"
     go_command += f" top_n {top_n}"
