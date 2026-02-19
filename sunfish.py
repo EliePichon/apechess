@@ -175,8 +175,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             for d in directions[p]:
                 for j in count(i + d, d):
                     q = self.board[j]
-                    # Stay inside the board, and off friendly pieces
-                    if q.isspace() or q.isupper():
+                    # Stay inside the board, off friendly pieces, and off rocks (both cases due to swapcase in rotate)
+                    if q.isspace() or q.isupper() or q == 'o':
                         break
                     # Pawn move, double move and capture
                     if p == "P":
@@ -254,8 +254,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         p, q = self.board[i], self.board[j]
         # Actual move
         score = pst[p][j] - pst[p][i]
-        # Capture
-        if q.islower():
+        # Capture (exclude rocks which are not capturable)
+        if q.islower() and q != 'o':
             score += pst[q.upper()][119 - j]
         # Castling check detection
         if abs(j - self.kp) < 2:

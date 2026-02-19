@@ -242,6 +242,27 @@ def main():
         description="Calculate bestmove in position with rock at d4"
     ))
 
+    # Test Case 8: Lowercase 'o' rocks (black rocks) should not be capturable by white pieces
+    # This is the exact bug from todo.md: FEN with lowercase 'o' rocks
+    results.append(test_rock_blocks_sliding_piece(
+        fen="1k3p2/8/1o1pp3/8/3o1P2/4KB2/3P2P1/8 w - - 0 1",
+        piece_name="King",
+        square_from="e3",
+        blocked_squares=["d4"],  # Rock at d4 should NOT be capturable
+        allowed_squares=["e4", "e2", "d3", "f2"],
+        description="Lowercase rock at d4 is not capturable by king at e3"
+    ))
+
+    # Test Case 9: Black to move - rocks should block after rotation (O becomes o via swapcase)
+    results.append(test_rock_blocks_sliding_piece(
+        fen="8/3r4/8/3O4/8/8/8/k7 b - - 0 1",
+        piece_name="d7",
+        square_from="d7",
+        blocked_squares=["d4", "d3", "d2", "d1"],
+        allowed_squares=["d6"],
+        description="Rock at d5 blocks black rook at d7 after rotation"
+    ))
+
     # Summary
     print("\n" + "="*70)
     print("TEST SUMMARY")
