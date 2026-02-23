@@ -64,6 +64,7 @@ The REST API provides three main functionalities for a chess game:
 #### Piece Representation
 - **Uppercase** = White pieces (P, N, B, R, Q, K)
 - **Lowercase** = Black pieces (p, n, b, r, q, k)
+- **O/o** = Rocks (neutral immovable obstacles, see "Rocks" section)
 - **Dot** (.) = Empty square
 - **Space/Newline** = Padding (off-board)
 
@@ -446,6 +447,28 @@ curl -X POST http://localhost:5500/bestmove \
 - All moves in `bestmoves` array respect the filter
 - Compatible with all other parameters (`top_n`, `precision`, etc.)
 
+### Rocks: Immovable Neutral Obstacles
+
+Rocks (`O`/`o`) are a custom piece type that act as neutral, immovable blockers on the board.
+
+**Behavior**:
+- Cannot be moved or captured by any piece
+- Block sliding pieces (R, B, Q) just like the board edge
+- Block pawn advances (single and double moves)
+- Block king movement
+- Knights **can** jump over rocks (as they jump over everything)
+- Have zero piece value (no impact on score)
+- Use `O` in FEN notation (e.g., `8/8/8/8/3O4/8/3R4/8 w - - 0 1`)
+
+**Implementation**:
+- Defined in `piece` dict with value 0 and empty `directions` tuple
+- `gen_moves()` skips `O` as a piece to move (line 173: `p == 'O'`)
+- `gen_moves()` treats `o` as a blocker (line 179: `q == 'o'`), breaking the ray without generating a capture
+- `value()` excludes `o` from capture scoring (line 258: `q != 'o'`)
+- PST for `O` is all zeros
+
+**Critical: `swapcase()` and rocks** - `Position.rotate()` calls `board[::-1].swapcase()`, which flips `O` to `o` and vice versa. Both cases must be handled: uppercase `O` is skipped as a movable piece, lowercase `o` is treated as an impassable blocker. Failing to handle `o` causes rocks to be treated as capturable black pieces.
+
 ### Stateless History Tracking
 
 **Critical Understanding**: The REST API is **completely stateless**. There is NO persistent game state between API calls.
@@ -596,7 +619,7 @@ Movement directions are defined as offsets:
 
 ### Score Conventions
 - Positive scores favor the current player (always white from engine's perspective)
-- Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000
+- Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0 (rock)
 - Mate detection: `MATE_LOWER = K - 10*Q`, `MATE_UPPER = K + 10*Q`
 - Scores include positional bonuses from piece-square tables
 
@@ -703,7 +726,13 @@ else:
 - Use 0.1-0.3 for adjustable difficulty levels
 - See "The Precision Parameter" section for details
 
-### 6. UCI Session Threading and Callbacks
+### 6. Rocks and `swapcase()` Interaction
+- Rocks use `O` (uppercase) in FEN, but `Position.rotate()` calls `swapcase()` turning them into `o`
+- Both `O` and `o` must be handled: `O` is skipped in piece iteration, `o` is blocked in ray traversal
+- If you add new piece logic involving rocks, always test both white-to-move and black-to-move positions
+- Tests: `tests/test_rocks.py` covers blocking, knight jumping, check blocking, and the `swapcase` rotation case
+
+### 7. UCI Session Threading and Callbacks
 - Each REST call spawns isolated thread with redirected stdin/stdout
 - `callback_holder` dict captures Python objects (Position, moves)
 - Don't rely on text output parsing alone
@@ -740,9 +769,10 @@ tools/fancy.py -cmd ./sunfish.py
 - `make help` - Show all available commands
 
 ### Test Files
-- `test_top_n.py` - Tests for top_n parameter and multi-move evaluation
-- `test_ignore_squares.py` - Tests for ignore_squares filtering
-- `test_performance.py` - Performance benchmarks for different configurations
+- `tests/test_top_n.py` - Tests for top_n parameter and multi-move evaluation
+- `tests/test_ignore_squares.py` - Tests for ignore_squares filtering
+- `tests/test_rocks.py` - Tests for rocks feature (blocking, knight jumping, swapcase rotation)
+- `tests/test_performance.py` - Performance benchmarks for different configurations
 - `tools/test_files/` - Legacy test positions (FEN strings for edge cases)
 
 ## Deployment

@@ -21,7 +21,8 @@ app = Flask(__name__)
 CORS(app,
     resources={r"/getmoves": {"origins": "*"},
                r"/bestmove": {"origins": "*"},
-               r"/ischeck": {"origins": "*"}})
+               r"/ischeck": {"origins": "*"},
+               r"/health": {"origins": "*"}})
 
 class BlockingInput:
     def __init__(self):
@@ -104,6 +105,10 @@ def run_uci_session(commands, expected_response=None, timeout=60):
         input_stream.write("quit\n")
         thread.join(timeout=20.0)
         raise TimeoutError(f"UCI session timed out waiting for response: {expected_response}")
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"})
 
 @app.route("/getmoves", methods=["POST"])
 def get_moves_endpoint():
@@ -208,7 +213,7 @@ def bestmove_endpoint():
     elif maxdepth:
         go_command += f" depth {maxdepth}"
     else:
-        go_command += " depth 8"
+        go_command += " depth 15"
 
     go_command += f" precision {precision if precision else 0}"
     go_command += f" top_n {top_n}"

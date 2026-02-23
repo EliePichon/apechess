@@ -26,7 +26,7 @@ version = "sunfish 2023"
 # That's pretty good given we have 64*6 = 384 values.
 # Though probably we could do better...
 # For one thing, they could easily all fit into int8.
-piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}
+piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000, "O": 0}
 pst = {
     'P': (   0,   0,   0,   0,   0,   0,   0,   0,
             78,  83,  86,  73, 102,  82,  85,  90,
@@ -76,6 +76,14 @@ pst = {
            -47, -42, -43, -79, -64, -32, -29, -32,
             -4,   3, -14, -50, -57, -18,  13,   4,
             17,  30,  -3, -14,   6,  -1,  40,  18),
+    'O': (   0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0,
+             0,   0,   0,   0,   0,   0,   0,   0),
 }
 # Pad tables and join piece and pst dictionaries
 for k, table in pst.items():
@@ -113,7 +121,8 @@ directions = {
     "B": (N+E, S+E, S+W, N+W),
     "R": (N, E, S, W),
     "Q": (N, E, S, W, N+E, S+E, S+W, N+W),
-    "K": (N, E, S, W, N+E, S+E, S+W, N+W)
+    "K": (N, E, S, W, N+E, S+E, S+W, N+W),
+    "O": ()  # Rocks don't move
 }
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
@@ -161,13 +170,13 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # as defined in the 'directions' map. The rays are broken e.g. by
         # captures or immediately in case of pieces such as knights.
         for i, p in enumerate(self.board):
-            if not p.isupper():
+            if not p.isupper() or p == 'O':
                 continue
             for d in directions[p]:
                 for j in count(i + d, d):
                     q = self.board[j]
-                    # Stay inside the board, and off friendly pieces
-                    if q.isspace() or q.isupper():
+                    # Stay inside the board, off friendly pieces, and off rocks (both cases due to swapcase in rotate)
+                    if q.isspace() or q.isupper() or q == 'o':
                         break
                     # Pawn move, double move and capture
                     if p == "P":
@@ -245,8 +254,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         p, q = self.board[i], self.board[j]
         # Actual move
         score = pst[p][j] - pst[p][i]
-        # Capture
-        if q.islower():
+        # Capture (exclude rocks which are not capturable)
+        if q.islower() and q != 'o':
             score += pst[q.upper()][119 - j]
         # Castling check detection
         if abs(j - self.kp) < 2:
