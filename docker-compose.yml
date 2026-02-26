@@ -7,6 +7,7 @@ services:
     # Mount local files into the container
     volumes:
       - ./server.py:/usr/src/app/server.py
+      - ./engine.py:/usr/src/app/engine.py
       - ./sunfish.py:/usr/src/app/sunfish.py
       - ./tools:/usr/src/app/tools
     # Expose and publish port 5000
