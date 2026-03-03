@@ -64,6 +64,8 @@ The REST API provides three main functionalities for a chess game:
 #### Piece Representation
 - **Uppercase** = White pieces (P, N, B, R, Q, K)
 - **Lowercase** = Black pieces (p, n, b, r, q, k)
+- **Powered (White)** = A, C, D, T, X, Y (pieces that can land on rocks, see "Powered Pieces" section)
+- **Powered (Black)** = a, c, d, t, x, y
 - **O/o** = Rocks (neutral immovable obstacles, see "Rocks" section)
 - **Dot** (.) = Empty square
 - **Space/Newline** = Padding (off-board)
@@ -469,6 +471,42 @@ Rocks (`O`/`o`) are a custom piece type that act as neutral, immovable blockers 
 
 **Critical: `swapcase()` and rocks** - `Position.rotate()` calls `board[::-1].swapcase()`, which flips `O` to `o` and vice versa. Both cases must be handled: uppercase `O` is skipped as a movable piece, lowercase `o` is treated as an impassable blocker. Failing to handle `o` causes rocks to be treated as capturable black pieces.
 
+### Powered Pieces: Rock-Landing Ability
+
+Powered pieces are variants of standard pieces that can **land on rocks**, destroying them. Any piece type can be powered. Powered pieces are encoded as alternate ASCII characters in FEN, following the same design pattern as Rocks (`O`/`o`) — the power is intrinsic to the character, so it survives `swapcase()` rotation automatically.
+
+**Character Mapping**:
+
+| Base Piece | Powered (White) | Powered (Black) | Mnemonic |
+|-----------|----------------|-----------------|----------|
+| P (Pawn)   | `A` | `a` | Augmented |
+| N (Knight) | `C` | `c` | Cavalry |
+| B (Bishop) | `D` | `d` | Diagonal |
+| R (Rook)   | `T` | `t` | Tower |
+| Q (Queen)  | `X` | `x` | eXtreme |
+| K (King)   | `Y` | `y` | Yonder |
+
+**FEN example**: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/TNBQKBCR w KQkq - 0 1` (powered Rook at a1, powered Knight at g1)
+
+**Behavior**:
+- Powered pieces move exactly like their base piece (same directions, same rules)
+- They can land on rocks (`O`/`o`), destroying the rock and occupying the square
+- Sliding powered pieces (T, D, X) stop after landing on a rock — they do NOT slide through
+- Non-powered pieces remain fully blocked by rocks (no behavior change)
+- Powered pawns (`A`) promote to powered pieces (`C`/`D`/`T`/`X`), not normal pieces
+- Have the same piece values and PSTs as their base pieces
+
+**Implementation**:
+- `POWERED_TO_BASE` dict maps powered chars to base chars (e.g., `'T': 'R'`)
+- `POWERED_PIECES` frozenset contains `'ACDTXY'` for fast membership checks
+- `piece`, `pst`, `directions` dicts all have entries for powered pieces (sharing base piece values)
+- `gen_moves()` allows powered pieces past the rock-blocking check (both `O` and `o`)
+- Pawn-specific logic uses `p in "PA"` instead of `p == "P"` to handle powered pawns
+- King-specific logic uses `p in "KY"` instead of `p == "K"` to handle powered kings
+- Non-slider stop set is `"PNKACY"` instead of `"PNK"` to include powered variants
+- `engine.py` player_pieces set includes `ACDTXY`
+- Tests: `tests/test_rock_landing.py`
+
 ### Stateless History Tracking
 
 **Critical Understanding**: The REST API is **completely stateless**. There is NO persistent game state between API calls.
@@ -772,6 +810,7 @@ tools/fancy.py -cmd ./sunfish.py
 - `tests/test_top_n.py` - Tests for top_n parameter and multi-move evaluation
 - `tests/test_ignore_squares.py` - Tests for ignore_squares filtering
 - `tests/test_rocks.py` - Tests for rocks feature (blocking, knight jumping, swapcase rotation)
+- `tests/test_rock_landing.py` - Tests for powered pieces (rock-landing, promotion, swapcase rotation)
 - `tests/test_performance.py` - Performance benchmarks for different configurations
 - `tools/test_files/` - Legacy test positions (FEN strings for edge cases)
 

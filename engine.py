@@ -60,7 +60,7 @@ def get_legal_moves(fen):
     hist = build_history(fen)
     position = hist[-1]
 
-    player_pieces = set("PNBRQK")
+    player_pieces = set("PNBRQKACDTXY")
     moves = {}
     for i, piece in enumerate(position.board):
         if piece in player_pieces:

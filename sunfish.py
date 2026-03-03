@@ -26,7 +26,8 @@ version = "sunfish 2023"
 # That's pretty good given we have 64*6 = 384 values.
 # Though probably we could do better...
 # For one thing, they could easily all fit into int8.
-piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000, "O": 0}
+piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000, "O": 0,
+         "A": 100, "C": 280, "D": 320, "T": 479, "X": 929, "Y": 60000}
 pst = {
     'P': (   0,   0,   0,   0,   0,   0,   0,   0,
             78,  83,  86,  73, 102,  82,  85,  90,
@@ -91,6 +92,13 @@ for k, table in pst.items():
     pst[k] = sum((padrow(table[i * 8 : i * 8 + 8]) for i in range(8)), ())
     pst[k] = (0,) * 20 + pst[k] + (0,) * 20
 
+# Powered pieces (rock-landing ability) share PSTs with their base pieces
+# Mapping: A=Pawn, C=Knight, D=Bishop, T=Rook, X=Queen, Y=King
+POWERED_TO_BASE = {'A': 'P', 'C': 'N', 'D': 'B', 'T': 'R', 'X': 'Q', 'Y': 'K'}
+POWERED_PIECES = frozenset('ACDTXY')
+for powered, base in POWERED_TO_BASE.items():
+    pst[powered] = pst[base]
+
 ###############################################################################
 # Global constants
 ###############################################################################
@@ -124,6 +132,9 @@ directions = {
     "K": (N, E, S, W, N+E, S+E, S+W, N+W),
     "O": ()  # Rocks don't move
 }
+# Powered pieces share directions with their base pieces
+for _powered, _base in POWERED_TO_BASE.items():
+    directions[_powered] = directions[_base]
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
@@ -175,12 +186,21 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             for d in directions[p]:
                 for j in count(i + d, d):
                     q = self.board[j]
-                    # Stay inside the board, off friendly pieces, and off rocks (both cases due to swapcase in rotate)
-                    if q.isspace() or q.isupper() or q == 'o':
+                    # Stay inside the board, and off friendly pieces (excluding rocks for powered pieces)
+                    if q.isspace():
+                        break
+                    if q.isupper():
+                        # Uppercase rocks (O) block normal pieces but powered pieces can land on them
+                        if q == 'O' and p in POWERED_PIECES:
+                            pass  # powered piece can land on rock
+                        else:
+                            break
+                    # Lowercase rocks (o, from rotation) block normal pieces but not powered ones
+                    if q == 'o' and p not in POWERED_PIECES:
                         break
                     # Pawn move, double move and capture
-                    if p == "P":
-                        if d in (N, N + N) and q != ".": break
+                    if p in "PA":
+                        if d in (N, N + N) and q != "." and not (q in 'Oo' and p == 'A'): break
                         if d == N + N and (i < A1 + N or self.board[i + N] != "."): break
                         if (
                             d in (N + W, N + E)
@@ -191,18 +211,19 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                             break
                         # If we move to the last row, we can be anything
                         if A8 <= j <= H8:
-                            for prom in "NBRQ":
+                            proms = "CDTX" if p == "A" else "NBRQ"
+                            for prom in proms:
                                 yield Move(i, j, prom)
                             break
                     # Move it
                     yield Move(i, j, "")
-                    # Stop crawlers from sliding, and sliding after captures
-                    if p in "PNK" or q.islower():
+                    # Stop crawlers from sliding, and sliding after captures (including landing on rocks)
+                    if p in "PNKACY" or q.islower() or q in 'Oo':
                         break
                     # Castling, by sliding the rook next to the king
-                    if i == A1 and self.board[j + E] == "K" and self.wc[0]:
+                    if i == A1 and self.board[j + E] in "KY" and self.wc[0]:
                         yield Move(j + E, j + W, "")
-                    if i == H1 and self.board[j + W] == "K" and self.wc[1]:
+                    if i == H1 and self.board[j + W] in "KY" and self.wc[1]:
                         yield Move(j + W, j + E, "")
 
     def rotate(self, nullmove=False):
@@ -231,14 +252,14 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         if j == H8: bc = (False, bc[1])
 
         # Castling
-        if p == "K":
+        if p in "KY":
             wc = (False, False)
             if abs(j - i) == 2:
                 kp = (i + j) // 2
                 board = put(board, A1 if j < i else H1, ".")
                 board = put(board, kp, "R")
         # Pawn promotion, double move and en passant capture
-        if p == "P":
+        if p in "PA":
             if A8 <= j <= H8:
                 board = put(board, j, prom)
             if j - i == 2 * N:
@@ -261,15 +282,15 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         if abs(j - self.kp) < 2:
             score += pst["K"][119 - j]
         # Castling
-        if p == "K" and abs(i - j) == 2:
+        if p in "KY" and abs(i - j) == 2:
             score += pst["R"][(i + j) // 2]
             score -= pst["R"][A1 if j < i else H1]
         # Special pawn stuff
-        if p == "P":
+        if p in "PA":
             if A8 <= j <= H8:
-                score += pst[prom][j] - pst["P"][j]
+                score += pst[prom][j] - pst[p][j]
             if j == self.ep:
-                score += pst["P"][119 - (j + S)]
+                score += pst[p][119 - (j + S)]
 
          # Then apply the random factor:
         if hasattr(self, 'searcher') and self.searcher.precision > 0.0:
