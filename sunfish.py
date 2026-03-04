@@ -136,6 +136,12 @@ directions = {
 for _powered, _base in POWERED_TO_BASE.items():
     directions[_powered] = directions[_base]
 
+# Frozensets for O(1) piece-identity checks in hot paths
+NON_SLIDERS = frozenset("PNKACY")
+PAWNS = frozenset("PA")
+KINGS = frozenset("KY")
+ROCKS = frozenset("Oo")
+
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
 # 8 queens up, but we got the king, we still exceed MATE_VALUE.
@@ -199,8 +205,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     if q == 'o' and p not in POWERED_PIECES:
                         break
                     # Pawn move, double move and capture
-                    if p in "PA":
-                        if d in (N, N + N) and q != "." and not (q in 'Oo' and p == 'A'): break
+                    if p in PAWNS:
+                        if d in (N, N + N) and q != "." and not (q in ROCKS and p == 'A'): break
                         if d == N + N and (i < A1 + N or self.board[i + N] != "."): break
                         if (
                             d in (N + W, N + E)
@@ -218,12 +224,12 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     # Move it
                     yield Move(i, j, "")
                     # Stop crawlers from sliding, and sliding after captures (including landing on rocks)
-                    if p in "PNKACY" or q.islower() or q in 'Oo':
+                    if p in NON_SLIDERS or q.islower() or q in ROCKS:
                         break
                     # Castling, by sliding the rook next to the king
-                    if i == A1 and self.board[j + E] in "KY" and self.wc[0]:
+                    if i == A1 and self.board[j + E] in KINGS and self.wc[0]:
                         yield Move(j + E, j + W, "")
-                    if i == H1 and self.board[j + W] in "KY" and self.wc[1]:
+                    if i == H1 and self.board[j + W] in KINGS and self.wc[1]:
                         yield Move(j + W, j + E, "")
 
     def rotate(self, nullmove=False):
@@ -252,14 +258,14 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         if j == H8: bc = (False, bc[1])
 
         # Castling
-        if p in "KY":
+        if p in KINGS:
             wc = (False, False)
             if abs(j - i) == 2:
                 kp = (i + j) // 2
                 board = put(board, A1 if j < i else H1, ".")
                 board = put(board, kp, "R")
         # Pawn promotion, double move and en passant capture
-        if p in "PA":
+        if p in PAWNS:
             if A8 <= j <= H8:
                 board = put(board, j, prom)
             if j - i == 2 * N:
@@ -282,11 +288,11 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         if abs(j - self.kp) < 2:
             score += pst["K"][119 - j]
         # Castling
-        if p in "KY" and abs(i - j) == 2:
+        if p in KINGS and abs(i - j) == 2:
             score += pst["R"][(i + j) // 2]
             score -= pst["R"][A1 if j < i else H1]
         # Special pawn stuff
-        if p in "PA":
+        if p in PAWNS:
             if A8 <= j <= H8:
                 score += pst[prom][j] - pst[p][j]
             if j == self.ep:
