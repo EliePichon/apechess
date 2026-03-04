@@ -114,4 +114,6 @@ def is_check_endpoint():
 
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", 5500))
-    app.run(host="127.0.0.1", port=port, debug=False)
+    host = os.environ.get("FLASK_HOST", "0.0.0.0")
+    debug = os.environ.get("debug", "False").lower() == "true"
+    app.run(host=host, port=port, debug=debug)

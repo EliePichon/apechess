@@ -104,7 +104,13 @@ Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_ro
 ## Dev Setup
 
 ```bash
-make up                     # Docker dev server on localhost:5500
+make up                     # Docker dev server on localhost:5500 (hot-reload enabled)
 make down                   # Stop
 python server.py            # Direct (after pip install -r requirements.txt)
 ```
+
+**Hot-reload**: Code changes to `server.py`, `engine.py`, `sunfish.py`, and `tools/` are picked up automatically via volume mounts + Flask debug mode. No restart needed.
+
+**When to rebuild**: Only run `make down && make up` after changing `requirements.txt` or `Dockerfile.local`. Never need `docker-compose build --no-cache` for code changes.
+
+**Host binding**: Flask defaults to `0.0.0.0` (accepts Docker port-mapped traffic). Override with `FLASK_HOST=127.0.0.1` for production.
