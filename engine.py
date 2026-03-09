@@ -2,8 +2,9 @@
 # Replaces the UCI stdin/stdout wrapper with direct function calls.
 
 import time
+import uuid
 import logging
-from threading import Event
+import threading
 
 import sunfish
 import tools.uci as uci
@@ -14,6 +15,114 @@ from tools.uci import from_fen, can_kill_king, render_move, parse_move, pv
 uci.sunfish = sunfish
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Game Session — holds position + Searcher state across requests
+# ---------------------------------------------------------------------------
+
+DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+class GameSession:
+    TP_MOVE_CAP = 100_000
+    EXPIRE_SECONDS = 1800  # 30 minutes
+
+    def __init__(self, session_id, fen=None):
+        self.session_id = session_id
+        self._searcher = sunfish.Searcher()
+        self._lock = threading.Lock()
+        self._last_used = time.time()
+        self._set_position(fen or DEFAULT_FEN)
+
+    def _set_position(self, fen, moves_str=""):
+        self._fen = fen
+        self._hist = build_history(fen, moves_str)
+
+    def apply_move(self, move_str):
+        """Apply a single move to the session position. Validates legality."""
+        white_pov = len(self._hist) % 2 == 1
+        parsed = parse_move(move_str, white_pov=white_pov)
+        pos = self._hist[-1]
+        legal = list(pos.get_legal_moves())
+        if parsed not in legal:
+            raise ValueError(f"Illegal move: {move_str}")
+        self._hist.append(pos.move(parsed))
+        return self._hist[-1]
+
+    def override_fen(self, fen, moves_str=""):
+        """Force-set position from FEN (for re-sync, undo, analysis)."""
+        self._set_position(fen, moves_str)
+
+    def run_search(self, search_fn):
+        """Execute search_fn(searcher, hist) while holding the lock."""
+        with self._lock:
+            self._last_used = time.time()
+            if len(self._searcher.tp_move) > self.TP_MOVE_CAP:
+                self._searcher.tp_move.clear()
+            return search_fn(self._searcher, self._hist)
+
+    def is_expired(self):
+        return time.time() - self._last_used > self.EXPIRE_SECONDS
+
+    @property
+    def hist(self):
+        return self._hist
+
+    @property
+    def position(self):
+        return self._hist[-1]
+
+    def stats(self):
+        return {
+            "tp_move_size": len(self._searcher.tp_move),
+            "tp_score_size": len(self._searcher.tp_score),
+            "ply": len(self._hist),
+        }
+
+
+# Session store
+_sessions = {}
+
+
+def create_session(fen=None):
+    """Create a new session with a server-generated ID. Returns session_id."""
+    _cleanup_expired()
+    sid = uuid.uuid4().hex[:12]
+    _sessions[sid] = GameSession(sid, fen)
+    return sid
+
+
+def get_session(session_id):
+    """Get a session by ID. Returns None if not found or expired."""
+    s = _sessions.get(session_id)
+    if s and not s.is_expired():
+        return s
+    return None
+
+
+def reset_session(session_id, fen=None):
+    """Reset an existing session or create a new one."""
+    if session_id in _sessions:
+        _sessions[session_id].override_fen(fen or DEFAULT_FEN)
+        _sessions[session_id]._searcher = sunfish.Searcher()
+    else:
+        _sessions[session_id] = GameSession(session_id, fen)
+
+
+def session_stats(session_id):
+    """Return stats for a session."""
+    s = get_session(session_id)
+    if s is None:
+        return None
+    return s.stats()
+
+
+def _cleanup_expired():
+    """Remove expired sessions."""
+    expired = [sid for sid, s in _sessions.items() if s.is_expired()]
+    for sid in expired:
+        del _sessions[sid]
 
 
 def build_history(fen, moves_str=""):
