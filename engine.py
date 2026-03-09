@@ -341,35 +341,8 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
     }
 
 
-def get_best_moves(fen, moves_history="", movetime=None, maxdepth=15,
-                   precision=0.0, top_n=1, ignore_squares=None):
-    """Compute the best move(s) for a position.
-
-    Returns dict with "bestmoves", "check", and optionally "depth_reached" keys
-    matching /bestmove response format.
-    """
-    fen_parts = fen.split()
-    initial_side = fen_parts[1]
-
-    hist = build_history(fen, moves_history)
-
-    searcher = sunfish.Searcher()
-    searcher.precision = precision
-
-    max_movetime = 0
-    if movetime:
-        max_movetime = movetime / 1000.0
-
-    result = _search_best_moves(
-        searcher, hist, max_movetime, maxdepth,
-        top_n, ignore_squares or []
-    )
-
-    if result["bestmove"] == "(none)":
-        return {"bestmoves": [], "check": False}
-
-    # Compute check status after applying best move
-    bestmove = result["bestmove"]
+def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"):
+    """Compute whether the opponent is in check after applying a move."""
     position = hist[-1]
 
     num_moves = len(moves_history.split()) if moves_history.strip() else 0
@@ -387,13 +360,75 @@ def get_best_moves(fen, moves_history="", movetime=None, maxdepth=15,
     promo = bestmove[4:].upper() if len(bestmove) > 4 else ""
 
     new_position = position.move(sunfish.Move(move_from, move_to, promo))
-    is_check_val = can_kill_king(new_position.rotate())
+    return can_kill_king(new_position.rotate())
+
+
+def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
+                   precision=0.0, top_n=1, ignore_squares=None,
+                   session_id=None, clutchness=False):
+    """Compute the best move(s) for a position.
+
+    Two modes:
+    - Stateless (fen required): creates fresh Searcher, backward-compatible.
+    - Session (session_id required): uses persistent Searcher for tp_move reuse.
+
+    When clutchness=True, returns the eval gap between best and 2nd-best move.
+    Any request can include fen to override/re-sync the session position.
+    """
+    internal_top_n = max(top_n, 2) if clutchness else top_n
+
+    max_movetime = 0
+    if movetime:
+        max_movetime = movetime / 1000.0
+
+    if session_id:
+        session = get_session(session_id)
+        if session is None:
+            return {"error": "Invalid or expired session_id"}, 404
+        if fen:
+            session.override_fen(fen, moves_history)
+
+        def do_search(searcher, hist):
+            searcher.precision = precision
+            return _search_best_moves(
+                searcher, hist, max_movetime, maxdepth,
+                internal_top_n, ignore_squares or []
+            )
+
+        result = session.run_search(do_search)
+        hist = session.hist
+    else:
+        if not fen:
+            return {"error": "Either fen or session_id is required"}, 400
+        hist = build_history(fen, moves_history)
+        searcher = sunfish.Searcher()
+        searcher.precision = precision
+        result = _search_best_moves(
+            searcher, hist, max_movetime, maxdepth,
+            internal_top_n, ignore_squares or []
+        )
+
+    if result["bestmove"] == "(none)":
+        return {"bestmoves": [], "check": False}
+
+    # Determine initial_side from hist or fen
+    if fen:
+        initial_side = fen.split()[1]
+    else:
+        # Infer from session: odd hist length = white to move
+        initial_side = 'w' if len(hist) % 2 == 1 else 'b'
+
+    is_check_val = _compute_check_after_move(
+        result["bestmove"], hist, moves_history, initial_side
+    )
 
     response = {
-        "bestmoves": result["scored_moves"],
+        "bestmoves": result["scored_moves"][:top_n],
         "check": is_check_val,
     }
     if result["depth_reached"] is not None:
         response["depth_reached"] = result["depth_reached"]
+    if clutchness and result.get("clutchness") is not None:
+        response["clutchness"] = result["clutchness"]
 
     return response
