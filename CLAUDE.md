@@ -6,7 +6,7 @@ Fork of Sunfish chess engine, exposed as a REST API (Flask, port 5500).
 
 - `sunfish.py` — Core engine (board, search, evaluation). Do not modify unless changing engine logic.
 - `engine.py` — Clean Python API wrapping sunfish directly.
-- `server.py` — Flask REST API calling engine.py. Stateless: each call creates a fresh UCI session in a thread.
+- `server.py` — Flask REST API calling engine.py. Supports both stateless mode and session-based stateful mode.
 - `tools/uci.py` — UCI protocol layer (used for CLI, not by server). `from_fen()` takes 6 args, not a FEN string. Needs `uci.sunfish = sunfish` before use.
 
 ## Board Representation
@@ -61,12 +61,41 @@ Variants of standard pieces that can **land on rocks**, destroying them. Encoded
 
 ## REST API
 
-All endpoints accept `{"fen": "..."}`. API is **fully stateless** — no memory between calls.
+Supports two modes: **stateless** (send FEN each request) and **session-based** (backend holds position).
 
+### Session Workflow (recommended)
+
+```
+POST /newgame { fen? } → { session_id }
+POST /bestmove { session_id } → { bestmoves, check, clutchness? }
+POST /evalmoves { session_id } → { moves: {square: [{move, eval}]}, check, clutchness }
+POST /move { session_id, move, computer_turn? } → { status, check, bestmoves?, clutchness? }
+```
+
+Any session endpoint accepts optional `fen` to override/re-sync position.
+
+### Endpoints
+
+- `POST /newgame` — Create session. Optional `fen` (defaults to starting position). Returns `{session_id: string}`.
+- `POST /move` — Apply move to session. Params: `session_id`, `move`, `computer_turn` (bool), `maxdepth`, `movetime`, `fen` (override). On computer turns, auto-returns bestmoves + clutchness.
+- `POST /evalmoves` — All legal moves with per-move eval scores. Params: `session_id` or `fen`, `maxdepth` (default 8). Returns `{moves: {square: [{move, eval}]}, check, clutchness}`.
 - `POST /getmoves` — Returns `{moves: {square: [move_strings]}, check: bool}`
-- `POST /bestmove` — Returns `{bestmoves: [[move, score], ...], check: bool}`
-  - Optional params: `movetime`, `maxdepth` (default 8), `precision` (0=strongest, 0.1-0.3=weaker), `top_n` (default 1), `ignore_squares` (list of squares to skip), `moves` (space-separated history)
+- `POST /bestmove` — Returns `{bestmoves: [[move, score], ...], check: bool, clutchness?: int}`
+  - Optional params: `movetime`, `maxdepth` (default 15), `precision` (0=strongest, 0.1-0.3=weaker), `top_n` (default 1), `ignore_squares` (list of squares to skip), `moves` (space-separated history), `session_id`, `clutchness` (bool)
 - `POST /ischeck` — Returns `{check: bool}`
+- `GET /session/stats?session_id=...` — Debug: `{tp_move_size, tp_score_size, ply}`
+
+### Session Management
+
+- Server-generated session IDs (UUID-based)
+- Sessions auto-expire after 30 min of inactivity
+- `tp_move` table capped at 100K entries (cleared if exceeded)
+- Thread-safe: each session has a lock preventing concurrent search corruption
+- `GameSession` class in `engine.py` holds Searcher + position history
+
+### Clutchness
+
+Eval gap between the best and 2nd-best move — measures how critical the turn is. Available on `/bestmove` (with `clutchness: true`) and `/evalmoves` (always included).
 
 ## Key Conventions
 
@@ -86,15 +115,16 @@ All endpoints accept `{"fen": "..."}`. API is **fully stateless** — no memory 
 make up && make test        # Start Docker dev server + run all tests
 make test-top-n             # Test top_n feature
 make test-ignore            # Test ignore_squares feature
+make test-session           # Test session/stateful engine + clutchness + evalmoves
 make logs                   # View server logs
 ```
 
 Tests are integration tests in `tests/` hitting HTTP endpoints inside Docker.
-Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_performance.py`.
+Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_performance.py`.
 
 ## Common Pitfalls
 
-1. **Stateless API**: Every call must send complete FEN + moves. No state persists.
+1. **Stateless vs Session**: Stateless endpoints require FEN. Session endpoints use `session_id` (from `/newgame`). Any session endpoint accepts optional `fen` for re-sync.
 2. **Coordinate flipping**: All black moves need `119 - coord`. FEN side-to-move determines this.
 3. **Rocks + swapcase**: `rotate()` flips O↔o. Both must be handled. Test both white/black to move.
 4. **`from_fen()` signature**: Takes 6 positional args (board, color, castling, enpas, hclock, fclock), NOT a FEN string.
