@@ -301,8 +301,16 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
                 score = quick_score
             scored_moves.append((move_str, score))
 
-        # Step 3d: Final sort and trim
+        # Step 3d: Final sort
         scored_moves.sort(key=lambda x: x[1], reverse=True)
+
+    # 3e - Compute clutchness (eval gap between best and 2nd-best) before trimming
+    clutchness_val = None
+    if len(scored_moves) >= 2:
+        clutchness_val = scored_moves[0][1] - scored_moves[1][1]
+
+    # 3f - Trim to requested top_n
+    if len(scored_moves) > top_n:
         scored_moves = scored_moves[:top_n]
 
     # 4 - Calculate PV for scoring
@@ -338,6 +346,7 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
         "bestmove": bestmove_str,
         "scored_moves": scored_moves,
         "depth_reached": final_depth,
+        "clutchness": clutchness_val,
     }
 
 
