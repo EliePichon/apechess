@@ -560,3 +560,46 @@ def _evaluate_all_moves(searcher, hist, max_movetime, max_depth):
         move_evals.append((m, score))
 
     return {"move_evals": move_evals, "depth_reached": final_depth}
+
+
+def apply_move(session_id, move_str, is_computer_turn=False,
+               maxdepth=15, movetime=None, fen=None, moves_history=""):
+    """Apply a move to a session and optionally auto-compute the response.
+
+    On computer turns, automatically computes and returns the best move(s)
+    with clutchness. On player turns, just confirms the move and check status.
+    Optional fen parameter for re-sync.
+    """
+    session = get_session(session_id)
+    if session is None:
+        return {"error": "Invalid or expired session_id"}, 404
+
+    if fen:
+        session.override_fen(fen, moves_history)
+
+    try:
+        session.apply_move(move_str)
+    except ValueError as e:
+        return {"error": str(e)}, 400
+
+    result = {"status": "ok"}
+
+    # Check detection after the move
+    pos = session.position
+    result["check"] = can_kill_king(pos.rotate())
+
+    # Auto-compute on computer turn
+    if is_computer_turn:
+        best = get_best_moves(
+            session_id=session_id, maxdepth=maxdepth,
+            movetime=movetime, clutchness=True
+        )
+        if isinstance(best, tuple):
+            # Error case (returns (dict, status_code))
+            result["bestmoves"] = []
+            result["clutchness"] = None
+        else:
+            result["bestmoves"] = best.get("bestmoves", [])
+            result["clutchness"] = best.get("clutchness")
+
+    return result
