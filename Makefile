@@ -1,4 +1,4 @@
-.PHONY: test test-top-n test-ignore test-rock-landing test-perf test-depth test-movetime help up down logs
+.PHONY: test test-top-n test-ignore test-rock-landing test-session test-perf test-depth test-movetime help up down logs
 
 # Default target
 help:
@@ -11,6 +11,7 @@ help:
 	@echo "  make test-top-n    - Run top_n feature tests"
 	@echo "  make test-ignore   - Run ignore_squares feature tests"
 	@echo "  make test-rock-landing - Run powered pieces (rock-landing) tests"
+	@echo "  make test-session  - Run session/stateful engine tests"
 	@echo "  make test-perf     - Run performance benchmarks"
 	@echo "  make test-depth    - Run depth performance analysis (15-20 min)"
 	@echo "  make test-movetime - Run movetime performance analysis (5-10 min)"
@@ -32,7 +33,7 @@ logs:
 	docker-compose logs -f
 
 # Run all tests
-test: test-top-n test-ignore test-rock-landing
+test: test-top-n test-ignore test-rock-landing test-session
 	@echo ""
 	@echo "✓ All tests completed!"
 
@@ -50,6 +51,11 @@ test-ignore:
 test-rock-landing:
 	@echo "Running rock-landing tests..."
 	python3 tests/test_rock_landing.py
+
+# Run session/stateful engine tests
+test-session:
+	@echo "Running session/stateful engine tests..."
+	python3 tests/test_session.py
 
 # Run performance benchmarks
 test-perf:
