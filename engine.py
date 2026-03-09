@@ -463,6 +463,7 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
             session.override_fen(fen, moves_history)
 
         def do_eval(searcher, hist):
+            searcher.precision = 0.0
             return _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
 
         result = session.run_search(do_eval)
