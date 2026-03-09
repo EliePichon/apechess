@@ -14,6 +14,10 @@ CORS(app,
     resources={r"/getmoves": {"origins": "*"},
                r"/bestmove": {"origins": "*"},
                r"/ischeck": {"origins": "*"},
+               r"/evalmoves": {"origins": "*"},
+               r"/newgame": {"origins": "*"},
+               r"/move": {"origins": "*"},
+               r"/session/stats": {"origins": "*"},
                r"/health": {"origins": "*"}})
 
 @app.route("/health", methods=["GET"])
@@ -49,19 +53,28 @@ def get_moves_endpoint():
 def bestmove_endpoint():
     """
     Get the best move(s) for the current position.
+    Supports both stateless (fen required) and session-based modes.
     Request JSON:
-      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int>, "top_n": <int> (default: 1), "ignore_squares": ["e2", "g1"] }
+      { "fen": "<fen_string>", "movetime": <int>, "maxdepth": <int>,
+        "top_n": <int>, "ignore_squares": ["e2", "g1"],
+        "session_id": "<string>", "clutchness": <bool> }
     Response JSON:
-      { "bestmoves": [["e2e4", 45], ...], "check": <bool> }
+      { "bestmoves": [["e2e4", 45], ...], "check": <bool>, "clutchness": <int> }
     """
     data = request.get_json()
-    if not data or "fen" not in data:
-        return jsonify({"error": "Missing 'fen' field"}), 400
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
 
-    fen = data["fen"]
-    fen_parts = fen.split()
-    if len(fen_parts) < 2:
-        return jsonify({"error": "Invalid FEN string"}), 400
+    fen = data.get("fen")
+    session_id = data.get("session_id")
+
+    if not fen and not session_id:
+        return jsonify({"error": "Either 'fen' or 'session_id' is required"}), 400
+
+    if fen:
+        fen_parts = fen.split()
+        if len(fen_parts) < 2:
+            return jsonify({"error": "Invalid FEN string"}), 400
 
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
@@ -69,6 +82,7 @@ def bestmove_endpoint():
     top_n = data.get("top_n", 1)
     ignore_squares = data.get("ignore_squares", [])
     moves_history = data.get("moves", "").lower()
+    clutchness = data.get("clutchness", False)
 
     # Match default depth logic from original server
     if not movetime and not maxdepth:
@@ -85,7 +99,11 @@ def bestmove_endpoint():
             precision=float(precision) if precision else 0.0,
             top_n=top_n,
             ignore_squares=ignore_squares,
+            session_id=session_id,
+            clutchness=clutchness,
         )
+        if isinstance(result, tuple):
+            return jsonify(result[0]), result[1]
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error processing request: {e}")
@@ -111,6 +129,144 @@ def is_check_endpoint():
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route("/newgame", methods=["POST"])
+def new_game_endpoint():
+    """
+    Create a new game session. Returns a server-generated session_id.
+    Request JSON:
+      { "fen": "<fen_string>" }  (optional, defaults to starting position)
+    Response JSON:
+      { "session_id": "<string>" }
+    """
+    data = request.get_json() or {}
+    fen = data.get("fen")
+
+    if fen:
+        fen_parts = fen.split()
+        if len(fen_parts) < 2:
+            return jsonify({"error": "Invalid FEN string"}), 400
+
+    try:
+        session_id = engine.create_session(fen)
+        return jsonify({"session_id": session_id})
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/move", methods=["POST"])
+def move_endpoint():
+    """
+    Apply a move to a session.
+    Request JSON:
+      { "session_id": "<string>", "move": "e2e4",
+        "computer_turn": <bool>, "maxdepth": <int>, "movetime": <int>,
+        "fen": "<fen_string>" }
+    Response JSON (player turn):
+      { "status": "ok", "check": <bool> }
+    Response JSON (computer turn):
+      { "status": "ok", "check": <bool>, "bestmoves": [...], "clutchness": <int> }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
+
+    session_id = data.get("session_id")
+    move_str = data.get("move")
+
+    if not session_id:
+        return jsonify({"error": "Missing 'session_id' field"}), 400
+    if not move_str:
+        return jsonify({"error": "Missing 'move' field"}), 400
+
+    is_computer_turn = data.get("computer_turn", False)
+    maxdepth = data.get("maxdepth", 15)
+    movetime = data.get("movetime", None)
+    fen = data.get("fen")
+    moves_history = data.get("moves", "").lower()
+
+    try:
+        result = engine.apply_move(
+            session_id=session_id,
+            move_str=move_str.lower(),
+            is_computer_turn=is_computer_turn,
+            maxdepth=maxdepth,
+            movetime=movetime,
+            fen=fen,
+            moves_history=moves_history,
+        )
+        if isinstance(result, tuple):
+            return jsonify(result[0]), result[1]
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error processing move: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/evalmoves", methods=["POST"])
+def eval_moves_endpoint():
+    """
+    Get all legal moves with evaluation scores for each.
+    Request JSON:
+      { "session_id": "<string>", "maxdepth": <int>, "fen": "<fen_string>" }
+    Response JSON:
+      { "moves": { "e2": [{"move": "e2e4", "eval": 45}, ...] },
+        "check": <bool>, "clutchness": <int> }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
+
+    fen = data.get("fen")
+    session_id = data.get("session_id")
+
+    if not fen and not session_id:
+        return jsonify({"error": "Either 'fen' or 'session_id' is required"}), 400
+
+    if fen:
+        fen_parts = fen.split()
+        if len(fen_parts) < 2:
+            return jsonify({"error": "Invalid FEN string"}), 400
+
+    maxdepth = data.get("maxdepth", 8)
+    movetime = data.get("movetime", None)
+    moves_history = data.get("moves", "").lower()
+
+    try:
+        result = engine.get_evaluated_moves(
+            fen=fen,
+            moves_history=moves_history,
+            maxdepth=maxdepth,
+            movetime=movetime,
+            session_id=session_id,
+        )
+        if isinstance(result, tuple):
+            return jsonify(result[0]), result[1]
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error processing request: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/session/stats", methods=["GET"])
+def session_stats_endpoint():
+    """
+    Get session statistics for debugging.
+    Query param: ?session_id=<string>
+    Response JSON:
+      { "tp_move_size": <int>, "tp_score_size": <int>, "ply": <int> }
+    """
+    session_id = request.args.get("session_id")
+    if not session_id:
+        return jsonify({"error": "Missing 'session_id' query parameter"}), 400
+
+    stats = engine.session_stats(session_id)
+    if stats is None:
+        return jsonify({"error": "Invalid or expired session_id"}), 404
+
+    return jsonify(stats)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", 5500))
