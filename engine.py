@@ -441,3 +441,122 @@ def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
         response["clutchness"] = result["clutchness"]
 
     return response
+
+
+def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
+                        session_id=None):
+    """Get all legal moves with evaluation scores for each.
+
+    Runs a search to populate the TT, then scores each legal move via TT
+    lookup or shallow search. Returns moves grouped by source square.
+    Supports both stateless (fen) and session-based modes.
+    """
+    max_movetime = 0
+    if movetime:
+        max_movetime = movetime / 1000.0
+
+    if session_id:
+        session = get_session(session_id)
+        if session is None:
+            return {"error": "Invalid or expired session_id"}, 404
+        if fen:
+            session.override_fen(fen, moves_history)
+
+        def do_eval(searcher, hist):
+            return _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
+
+        result = session.run_search(do_eval)
+        hist = session.hist
+    else:
+        if not fen:
+            return {"error": "Either fen or session_id is required"}, 400
+        hist = build_history(fen, moves_history)
+        searcher = sunfish.Searcher()
+        searcher.precision = 0.0
+        result = _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
+
+    # Determine side to move for coordinate rendering
+    white_pov = len(hist) % 2 == 1
+
+    # Check detection
+    pos = hist[-1]
+    check = can_kill_king(pos.rotate())
+
+    # Build response grouped by source square
+    player_pieces = frozenset("PNBRQKACDTXY")
+    moves_by_square = {}
+    all_evals = []
+
+    for m, score in result["move_evals"]:
+        if white_pov:
+            src = sunfish.render(m.i)
+            move_str = sunfish.render(m.i) + sunfish.render(m.j) + m.prom.lower()
+        else:
+            src = sunfish.render(119 - m.i)
+            move_str = sunfish.render(119 - m.i) + sunfish.render(119 - m.j) + m.prom.lower()
+
+        if src not in moves_by_square:
+            moves_by_square[src] = []
+        moves_by_square[src].append({"move": move_str, "eval": score})
+        all_evals.append(score)
+
+    # Sort moves within each square by eval descending
+    for sq in moves_by_square:
+        moves_by_square[sq].sort(key=lambda x: x["eval"], reverse=True)
+
+    # Compute clutchness
+    all_evals.sort(reverse=True)
+    clutchness_val = None
+    if len(all_evals) >= 2:
+        clutchness_val = all_evals[0] - all_evals[1]
+
+    return {
+        "moves": moves_by_square,
+        "check": check,
+        "clutchness": clutchness_val,
+    }
+
+
+def _evaluate_all_moves(searcher, hist, max_movetime, max_depth):
+    """Run a search then evaluate each legal move using TT + shallow search."""
+    start = time.time()
+    final_depth = 1
+
+    # Run main search to populate TT
+    for depth, gamma, score, move in searcher.search(hist):
+        final_depth = depth
+        if depth - 1 >= max_depth:
+            break
+        elapsed = time.time() - start
+        if depth > 1 and max_movetime > 0 and elapsed > max_movetime * 2 / 3:
+            break
+
+    pos = hist[-1]
+    legal_moves = [m for m in pos.gen_moves() if not can_kill_king(pos.move(m))]
+
+    eval_depth = max(3, final_depth - 3)
+    move_evals = []
+
+    for m in legal_moves:
+        new_pos = pos.move(m)
+        score = None
+
+        # Try TT lookup at various depths
+        for check_depth in range(final_depth - 1, 0, -1):
+            entry = searcher.tp_score.get((new_pos, check_depth, True), None)
+            if entry is not None:
+                bound_width = entry.upper - entry.lower
+                if bound_width < 1000:
+                    score = -((entry.lower + entry.upper) // 2)
+                    break
+
+        # Fallback: shallow search
+        if score is None:
+            try:
+                score = -searcher.bound(new_pos, 0, eval_depth, can_null=True)
+            except Exception:
+                score = pos.value(m)
+
+        move_evals.append((m, score))
+
+    return {"move_evals": move_evals, "depth_reached": final_depth}
