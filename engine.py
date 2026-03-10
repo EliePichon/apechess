@@ -681,6 +681,7 @@ def apply_move(session_id, move_str, is_computer_turn=False,
     # Check detection after the move
     pos = session.position
     result["check"] = can_kill_king(pos.rotate())
+    result["ply"] = len(session.hist)
 
     # Auto-compute on computer turn
     if is_computer_turn:
@@ -700,7 +701,8 @@ def apply_move(session_id, move_str, is_computer_turn=False,
 
 
 def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
-                  top_n=1, ignore_squares=None, peek_next=False, peek_maxdepth=5):
+                  top_n=1, ignore_squares=None, peek_next=False, peek_maxdepth=5,
+                  fen=None, moves_history=""):
     """Computer plays a turn: search, apply best move, detect game over, optionally peek.
 
     All operations in a single session lock acquisition for thread safety and TT reuse.
@@ -708,6 +710,9 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
     session = get_session(session_id)
     if session is None:
         return {"error": "Invalid or expired session_id"}, 404
+
+    if fen:
+        session.override_fen(fen, moves_history)
 
     max_movetime = (movetime / 1000.0) if movetime else 0
 
@@ -722,7 +727,8 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
 
         if result["bestmove"] == "(none)":
             game_over = _detect_game_over(hist[-1])
-            return {"move": None, "eval": None, "check": False, "game_over": game_over}
+            return {"move": None, "eval": None, "check": False, "game_over": game_over,
+                    "ply": len(session.hist)}
 
         best_move_str = result["bestmove"]
         best_eval = result["scored_moves"][0][1] if result.get("scored_moves") else 0
@@ -740,6 +746,7 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
             "eval": best_eval,
             "check": check,
             "game_over": game_over,
+            "ply": len(session.hist),
         }
 
         # 4. Optionally peek at the next position
@@ -791,6 +798,7 @@ def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
         game_over = _detect_game_over(pos_after)
         response["check"] = check
         response["game_over"] = game_over
+        response["ply"] = len(session.hist)
 
         # 4. Peek at next position
         if peek_next and game_over is None:

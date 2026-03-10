@@ -311,6 +311,60 @@ def test_full_game_workflow():
     test("valid bestmoves", len(data.get("bestmoves", [])) > 0)
 
 
+def test_turn_fen_override():
+    """Test that /turn accepts fen override to re-sync position before playing."""
+    print("\n--- Test: /turn with FEN override ---")
+    # Create session at starting position
+    r = requests.post(f"{BASE_URL}/newgame", json={})
+    sid = r.json()["session_id"]
+
+    # Override to a position where it's black's turn (after 1.e4)
+    after_e4_fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+    r = requests.post(f"{BASE_URL}/turn", json={
+        "session_id": sid,
+        "fen": after_e4_fen,
+        "maxdepth": 4,
+    })
+    test("/turn with fen override status 200", r.status_code == 200)
+    data = r.json()
+    test("/turn returned a move", data.get("move") is not None)
+    test("/turn game_over is null", data.get("game_over") is None)
+
+
+def test_turn_ply():
+    """Test that /turn response includes ply field."""
+    print("\n--- Test: /turn includes ply ---")
+    r = requests.post(f"{BASE_URL}/newgame", json={})
+    sid = r.json()["session_id"]
+
+    r = requests.post(f"{BASE_URL}/turn", json={
+        "session_id": sid,
+        "maxdepth": 4,
+    })
+    test("/turn status 200", r.status_code == 200)
+    data = r.json()
+    test("/turn has ply field", "ply" in data)
+    test("/turn ply is int", isinstance(data.get("ply"), int))
+    # After engine plays 1 move from start, ply should be 2 (initial + after move)
+    test("/turn ply is 2 after one move", data.get("ply") == 2)
+
+
+def test_move_ply():
+    """Test that /move response includes ply field."""
+    print("\n--- Test: /move includes ply ---")
+    r = requests.post(f"{BASE_URL}/newgame", json={})
+    sid = r.json()["session_id"]
+
+    r = requests.post(f"{BASE_URL}/move", json={
+        "session_id": sid,
+        "move": "e2e4",
+    })
+    test("/move status 200", r.status_code == 200)
+    data = r.json()
+    test("/move has ply field", "ply" in data)
+    test("/move ply is 2 after one move", data.get("ply") == 2)
+
+
 def main():
     print("=" * 60)
     print("Session / Stateful Engine Tests")
@@ -334,6 +388,9 @@ def main():
     test_session_stats_invalid()
     test_session_isolation()
     test_full_game_workflow()
+    test_turn_fen_override()
+    test_turn_ply()
+    test_move_ply()
 
     print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed")

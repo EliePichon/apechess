@@ -250,6 +250,8 @@ def turn_endpoint():
     ignore_squares = data.get("ignore_squares", [])
     peek_next = data.get("peek_next", False)
     peek_maxdepth = data.get("peek_maxdepth", 5)
+    fen = data.get("fen")
+    moves_history = data.get("moves", "").lower()
 
     try:
         result = engine.computer_turn(
@@ -261,6 +263,8 @@ def turn_endpoint():
             ignore_squares=ignore_squares,
             peek_next=peek_next,
             peek_maxdepth=peek_maxdepth,
+            fen=fen,
+            moves_history=moves_history,
         )
         if isinstance(result, tuple):
             return jsonify(result[0]), result[1]
