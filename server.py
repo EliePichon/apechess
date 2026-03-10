@@ -17,6 +17,7 @@ CORS(app,
                r"/evalmoves": {"origins": "*"},
                r"/newgame": {"origins": "*"},
                r"/move": {"origins": "*"},
+               r"/turn": {"origins": "*"},
                r"/session/stats": {"origins": "*"},
                r"/health": {"origins": "*"}})
 
@@ -185,22 +186,87 @@ def move_endpoint():
     movetime = data.get("movetime", None)
     fen = data.get("fen")
     moves_history = data.get("moves", "").lower()
+    grade = data.get("grade", False)
+    grade_maxdepth = data.get("grade_maxdepth", 8)
+    peek_next = data.get("peek_next", False)
+    peek_maxdepth = data.get("peek_maxdepth", 5)
 
     try:
-        result = engine.apply_move(
-            session_id=session_id,
-            move_str=move_str.lower(),
-            is_computer_turn=is_computer_turn,
-            maxdepth=maxdepth,
-            movetime=movetime,
-            fen=fen,
-            moves_history=moves_history,
-        )
+        # Dream API path: grade or peek_next requested
+        if grade or peek_next:
+            result = engine.player_move(
+                session_id=session_id,
+                move_str=move_str.lower(),
+                grade=grade,
+                grade_maxdepth=grade_maxdepth,
+                peek_next=peek_next,
+                peek_maxdepth=peek_maxdepth,
+                fen=fen,
+                moves_history=moves_history,
+            )
+        else:
+            # Legacy path (unchanged)
+            result = engine.apply_move(
+                session_id=session_id,
+                move_str=move_str.lower(),
+                is_computer_turn=is_computer_turn,
+                maxdepth=maxdepth,
+                movetime=movetime,
+                fen=fen,
+                moves_history=moves_history,
+            )
         if isinstance(result, tuple):
             return jsonify(result[0]), result[1]
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error processing move: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/turn", methods=["POST"])
+def turn_endpoint():
+    """
+    Computer plays a turn: search for best move, apply it, detect game state.
+    Request JSON:
+      { "session_id": "<string>", "maxdepth": <int>, "movetime": <int>,
+        "precision": <float>, "top_n": <int>, "ignore_squares": [...],
+        "peek_next": <bool>, "peek_maxdepth": <int> }
+    Response JSON:
+      { "move": "g1f3", "eval": 32, "check": false, "game_over": null,
+        "next": { "legal_moves": {...}, "check": false, "clutchness": 42, "best_eval": 38 } }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
+
+    session_id = data.get("session_id")
+    if not session_id:
+        return jsonify({"error": "Missing 'session_id' field"}), 400
+
+    maxdepth = data.get("maxdepth", 15)
+    movetime = data.get("movetime", None)
+    precision = float(data.get("precision", 0.0))
+    top_n = data.get("top_n", 1)
+    ignore_squares = data.get("ignore_squares", [])
+    peek_next = data.get("peek_next", False)
+    peek_maxdepth = data.get("peek_maxdepth", 5)
+
+    try:
+        result = engine.computer_turn(
+            session_id=session_id,
+            maxdepth=maxdepth,
+            movetime=movetime,
+            precision=precision,
+            top_n=top_n,
+            ignore_squares=ignore_squares,
+            peek_next=peek_next,
+            peek_maxdepth=peek_maxdepth,
+        )
+        if isinstance(result, tuple):
+            return jsonify(result[0]), result[1]
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error processing turn: {e}")
         return jsonify({"error": str(e)}), 500
 
 

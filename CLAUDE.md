@@ -63,7 +63,19 @@ Variants of standard pieces that can **land on rocks**, destroying them. Encoded
 
 Supports two modes: **stateless** (send FEN each request) and **session-based** (backend holds position).
 
-### Session Workflow (recommended)
+### Dream API Workflow (recommended)
+
+Computer turns = `/turn`. Player turns = `/move`. That's it.
+
+```
+POST /newgame { fen? } → { session_id }
+POST /turn { session_id, peek_next? } → { move, eval, check, game_over, next? }
+POST /move { session_id, move, grade?, peek_next? } → { status, check, game_over, grade?, next? }
+```
+
+`peek_next` piggybacks a shallow search (~50-150ms) to pre-compute the next position's legal moves + clutchness, enabling instant puzzle triggers.
+
+### Legacy Session Workflow
 
 ```
 POST /newgame { fen? } → { session_id }
@@ -77,7 +89,14 @@ Any session endpoint accepts optional `fen` to override/re-sync position.
 ### Endpoints
 
 - `POST /newgame` — Create session. Optional `fen` (defaults to starting position). Returns `{session_id: string}`.
-- `POST /move` — Apply move to session. Params: `session_id`, `move`, `computer_turn` (bool), `maxdepth`, `movetime`, `fen` (override). On computer turns, auto-returns bestmoves + clutchness.
+- `POST /turn` — Computer plays a turn. Searches for best move, applies it to session, detects game state.
+  - Params: `session_id`, `maxdepth` (default 15), `movetime`, `precision` (0=strongest), `top_n` (default 1), `ignore_squares`, `peek_next` (bool), `peek_maxdepth` (default 5)
+  - Returns `{move, eval, check, game_over, next?: {legal_moves, check, clutchness, best_eval}}`
+  - `game_over`: `null`, `"checkmate"`, or `"stalemate"`
+  - `next` block only present when `peek_next: true` and `game_over` is null
+- `POST /move` — Apply move to session. Two paths:
+  - **Dream API** (when `grade` or `peek_next` set): `session_id`, `move`, `grade` (bool), `peek_next` (bool), `peek_maxdepth` (default 5). Returns `{status, check, game_over, grade?: {player_eval, best_eval, best_move, accuracy}, next?: {legal_moves, check, clutchness, best_eval}}`
+  - **Legacy** (no grade/peek): `session_id`, `move`, `computer_turn` (bool), `maxdepth`, `movetime`, `fen` (override). Returns `{status, check, bestmoves?, clutchness?}`
 - `POST /evalmoves` — All legal moves with per-move eval scores. Params: `session_id` or `fen`, `maxdepth` (default 8). Returns `{moves: {square: [{move, eval}]}, check, clutchness}`.
 - `POST /getmoves` — Returns `{moves: {square: [move_strings]}, check: bool}`
 - `POST /bestmove` — Returns `{bestmoves: [[move, score], ...], check: bool, clutchness?: int}`
@@ -116,11 +135,12 @@ make up && make test        # Start Docker dev server + run all tests
 make test-top-n             # Test top_n feature
 make test-ignore            # Test ignore_squares feature
 make test-session           # Test session/stateful engine + clutchness + evalmoves
+make test-dream             # Test Dream API (/turn + grade/peek)
 make logs                   # View server logs
 ```
 
 Tests are integration tests in `tests/` hitting HTTP endpoints inside Docker.
-Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_performance.py`.
+Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_performance.py`.
 
 ## Common Pitfalls
 

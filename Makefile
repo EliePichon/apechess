@@ -1,4 +1,4 @@
-.PHONY: test test-top-n test-ignore test-rock-landing test-session test-perf test-depth test-movetime help up down logs
+.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-perf test-depth test-movetime help up down logs
 
 # Default target
 help:
@@ -12,6 +12,7 @@ help:
 	@echo "  make test-ignore   - Run ignore_squares feature tests"
 	@echo "  make test-rock-landing - Run powered pieces (rock-landing) tests"
 	@echo "  make test-session  - Run session/stateful engine tests"
+	@echo "  make test-dream    - Run Dream API tests (/turn + grade/peek)"
 	@echo "  make test-perf     - Run performance benchmarks"
 	@echo "  make test-depth    - Run depth performance analysis (15-20 min)"
 	@echo "  make test-movetime - Run movetime performance analysis (5-10 min)"
@@ -33,7 +34,7 @@ logs:
 	docker-compose logs -f
 
 # Run all tests
-test: test-top-n test-ignore test-rock-landing test-session
+test: test-top-n test-ignore test-rock-landing test-session test-dream
 	@echo ""
 	@echo "✓ All tests completed!"
 
@@ -56,6 +57,11 @@ test-rock-landing:
 test-session:
 	@echo "Running session/stateful engine tests..."
 	python3 tests/test_session.py
+
+# Run Dream API tests
+test-dream:
+	@echo "Running Dream API tests..."
+	python3 tests/test_dream_api.py
 
 # Run performance benchmarks
 test-perf:

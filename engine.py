@@ -157,6 +157,45 @@ def is_check(fen):
     return can_kill_king(position)
 
 
+def _detect_game_over(pos):
+    """Check if a position is checkmate, stalemate, or ongoing.
+
+    Returns "checkmate", "stalemate", or None (game continues).
+    """
+    legal = list(pos.get_legal_moves())
+    if legal:
+        return None
+    in_check = can_kill_king(pos.rotate())
+    return "checkmate" if in_check else "stalemate"
+
+
+def _get_legal_moves_from_pos(pos, white_pov):
+    """Get legal moves grouped by source square from a Position object.
+
+    Returns dict: {square_str: [move_str, ...]}
+    """
+    player_pieces = frozenset("PNBRQKACDTXY")
+    moves = {}
+    for i, piece in enumerate(pos.board):
+        if piece in player_pieces:
+            legal = pos.get_legal_moves(square=i)
+            if legal:
+                if white_pov:
+                    sq = sunfish.render(i)
+                    move_strs = [
+                        sunfish.render(m.i) + sunfish.render(m.j) + m.prom.lower()
+                        for m in legal
+                    ]
+                else:
+                    sq = sunfish.render(119 - i)
+                    move_strs = [
+                        sunfish.render(119 - m.i) + sunfish.render(119 - m.j) + m.prom.lower()
+                        for m in legal
+                    ]
+                moves[sq] = move_strs
+    return moves
+
+
 def get_legal_moves(fen):
     """Get all legal moves for the position described by the FEN.
 
@@ -169,30 +208,84 @@ def get_legal_moves(fen):
     hist = build_history(fen)
     position = hist[-1]
 
-    player_pieces = set("PNBRQKACDTXY")
-    moves = {}
-    for i, piece in enumerate(position.board):
-        if piece in player_pieces:
-            legal = position.get_legal_moves(square=i)
-            if legal:
-                rendered = [
-                    sunfish.render(m.i) + sunfish.render(m.j) + m.prom.lower()
-                    for m in legal
-                ]
-                if side_to_move == "b":
-                    flipped_square = sunfish.render(119 - i)
-                    flipped_moves = [
-                        sunfish.render(119 - m.i) + sunfish.render(119 - m.j) + m.prom.lower()
-                        for m in legal
-                    ]
-                    moves[flipped_square] = flipped_moves
-                else:
-                    moves[sunfish.render(i)] = rendered
+    moves = _get_legal_moves_from_pos(position, white_pov=(side_to_move != "b"))
 
     rotated_pos = position.rotate()
     check = can_kill_king(rotated_pos)
 
     return {"moves": moves, "check": check}
+
+
+def _peek_next_position(searcher, hist, maxdepth=5):
+    """Shallow search on current position for legal moves, clutchness, best_eval.
+
+    Must be called under session lock. Reuses the session's searcher (TT benefits).
+    """
+    pos = hist[-1]
+    white_pov = len(hist) % 2 == 1
+
+    moves = _get_legal_moves_from_pos(pos, white_pov)
+    check = can_kill_king(pos.rotate())
+
+    # Shallow search for clutchness + best_eval
+    result = _search_best_moves(searcher, hist, 0, maxdepth, 2, [])
+    clutchness_val = result.get("clutchness")
+    best_eval = result["scored_moves"][0][1] if result.get("scored_moves") else None
+
+    return {
+        "legal_moves": moves,
+        "check": check,
+        "clutchness": clutchness_val,
+        "best_eval": best_eval,
+    }
+
+
+def _grade_move(searcher, hist, move_str, maxdepth=8):
+    """Grade a player's move by comparing to the engine's best.
+
+    Must be called BEFORE applying the move (needs pre-move position + TT).
+    """
+    # Search for the best move
+    result = _search_best_moves(searcher, hist, 0, maxdepth, 2, [])
+    best_move_str = result.get("bestmove", "(none)")
+    best_eval = result["scored_moves"][0][1] if result.get("scored_moves") else 0
+
+    # Evaluate the player's specific move
+    pos = hist[-1]
+    white_pov = len(hist) % 2 == 1
+    player_move_obj = parse_move(move_str, white_pov=white_pov)
+    new_pos = pos.move(player_move_obj)
+
+    # Try TT lookup first
+    player_eval = None
+    final_depth = result.get("depth_reached", 1)
+    for check_depth in range(final_depth - 1, 0, -1):
+        entry = searcher.tp_score.get((new_pos, check_depth, True), None)
+        if entry is not None:
+            bound_width = entry.upper - entry.lower
+            if bound_width < 1000:
+                player_eval = -((entry.lower + entry.upper) // 2)
+                break
+
+    # Fallback: shallow search
+    if player_eval is None:
+        try:
+            eval_depth = max(3, final_depth - 3)
+            player_eval = -searcher.bound(new_pos, 0, eval_depth, can_null=True)
+        except Exception:
+            player_eval = pos.value(player_move_obj)
+
+    # Accuracy: 1.0 = perfect, 0.0 = lost >= 200 centipawns
+    ACCURACY_SCALE = 200
+    eval_gap = max(0, best_eval - player_eval)
+    accuracy = round(max(0.0, 1.0 - eval_gap / ACCURACY_SCALE), 2)
+
+    return {
+        "player_eval": player_eval,
+        "best_eval": best_eval,
+        "best_move": best_move_str,
+        "accuracy": accuracy,
+    }
 
 
 def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_squares):
@@ -604,3 +697,108 @@ def apply_move(session_id, move_str, is_computer_turn=False,
             result["clutchness"] = best.get("clutchness")
 
     return result
+
+
+def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
+                  top_n=1, ignore_squares=None, peek_next=False, peek_maxdepth=5):
+    """Computer plays a turn: search, apply best move, detect game over, optionally peek.
+
+    All operations in a single session lock acquisition for thread safety and TT reuse.
+    """
+    session = get_session(session_id)
+    if session is None:
+        return {"error": "Invalid or expired session_id"}, 404
+
+    max_movetime = (movetime / 1000.0) if movetime else 0
+
+    def do_turn(searcher, hist):
+        searcher.precision = precision
+
+        # 1. Search for best move
+        result = _search_best_moves(
+            searcher, hist, max_movetime, maxdepth,
+            top_n, ignore_squares or []
+        )
+
+        if result["bestmove"] == "(none)":
+            game_over = _detect_game_over(hist[-1])
+            return {"move": None, "eval": None, "check": False, "game_over": game_over}
+
+        best_move_str = result["bestmove"]
+        best_eval = result["scored_moves"][0][1] if result.get("scored_moves") else 0
+
+        # 2. Apply the move to the session
+        session.apply_move(best_move_str)
+
+        # 3. Detect check and game_over after our move
+        pos_after = session.position
+        check = can_kill_king(pos_after.rotate())
+        game_over = _detect_game_over(pos_after)
+
+        response = {
+            "move": best_move_str,
+            "eval": best_eval,
+            "check": check,
+            "game_over": game_over,
+        }
+
+        # 4. Optionally peek at the next position
+        if peek_next and game_over is None:
+            response["next"] = _peek_next_position(searcher, session.hist, peek_maxdepth)
+
+        return response
+
+    return session.run_search(do_turn)
+
+
+def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
+                peek_next=False, peek_maxdepth=5, fen=None, moves_history=""):
+    """Player makes a move: validate, optionally grade, apply, detect game over, optionally peek.
+
+    All operations in a single session lock acquisition.
+    Order: grade (before move) -> apply -> game_over -> peek (after move).
+    """
+    session = get_session(session_id)
+    if session is None:
+        return {"error": "Invalid or expired session_id"}, 404
+
+    if fen:
+        session.override_fen(fen, moves_history)
+
+    def do_move(searcher, hist):
+        searcher.precision = 0.0
+
+        # Validate move legality
+        white_pov = len(hist) % 2 == 1
+        parsed = parse_move(move_str, white_pov=white_pov)
+        pos = hist[-1]
+        legal = list(pos.get_legal_moves())
+        if parsed not in legal:
+            raise ValueError(f"Illegal move: {move_str}")
+
+        response = {"status": "ok"}
+
+        # 1. Grade BEFORE applying (needs pre-move position + TT)
+        if grade:
+            response["grade"] = _grade_move(searcher, hist, move_str, grade_maxdepth)
+
+        # 2. Apply move
+        session.apply_move(move_str)
+
+        # 3. Check and game_over detection
+        pos_after = session.position
+        check = can_kill_king(pos_after.rotate())
+        game_over = _detect_game_over(pos_after)
+        response["check"] = check
+        response["game_over"] = game_over
+
+        # 4. Peek at next position
+        if peek_next and game_over is None:
+            response["next"] = _peek_next_position(searcher, session.hist, peek_maxdepth)
+
+        return response
+
+    try:
+        return session.run_search(do_move)
+    except ValueError as e:
+        return {"error": str(e)}, 400
