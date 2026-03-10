@@ -1,4 +1,4 @@
-.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-perf test-depth test-movetime help up down logs
+.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-perf test-session-perf test-depth test-movetime help up down logs
 
 # Default target
 help:
@@ -14,6 +14,7 @@ help:
 	@echo "  make test-session  - Run session/stateful engine tests"
 	@echo "  make test-dream    - Run Dream API tests (/turn + grade/peek)"
 	@echo "  make test-perf     - Run performance benchmarks"
+	@echo "  make test-session-perf - Session vs stateless TP reuse benchmark"
 	@echo "  make test-depth    - Run depth performance analysis (15-20 min)"
 	@echo "  make test-movetime - Run movetime performance analysis (5-10 min)"
 	@echo ""
@@ -68,6 +69,14 @@ test-perf:
 	@echo "Running performance benchmarks..."
 	@echo "This may take a few minutes..."
 	python3 tests/test_performance.py
+
+# Run session vs stateless benchmark
+test-session-perf:
+	@echo "Running session vs stateless benchmark..."
+	@echo "Engine plays itself for ~20 moves, comparing TP reuse vs cold starts"
+	@echo "This may take a few minutes..."
+	@echo ""
+	python3 tests/test_session_perf.py
 
 # Run depth performance analysis
 test-depth:
