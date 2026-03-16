@@ -190,6 +190,7 @@ def move_endpoint():
     grade_maxdepth = data.get("grade_maxdepth", 8)
     peek_next = data.get("peek_next", False)
     peek_maxdepth = data.get("peek_maxdepth", 5)
+    peek_top_n = data.get("peek_top_n", 2)
 
     try:
         # Dream API path: grade or peek_next requested
@@ -201,6 +202,7 @@ def move_endpoint():
                 grade_maxdepth=grade_maxdepth,
                 peek_next=peek_next,
                 peek_maxdepth=peek_maxdepth,
+                peek_top_n=peek_top_n,
                 fen=fen,
                 moves_history=moves_history,
             )
@@ -250,6 +252,7 @@ def turn_endpoint():
     ignore_squares = data.get("ignore_squares", [])
     peek_next = data.get("peek_next", False)
     peek_maxdepth = data.get("peek_maxdepth", 5)
+    peek_top_n = data.get("peek_top_n", 2)
     fen = data.get("fen")
     moves_history = data.get("moves", "").lower()
 
@@ -263,6 +266,7 @@ def turn_endpoint():
             ignore_squares=ignore_squares,
             peek_next=peek_next,
             peek_maxdepth=peek_maxdepth,
+            peek_top_n=peek_top_n,
             fen=fen,
             moves_history=moves_history,
         )

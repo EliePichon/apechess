@@ -216,28 +216,38 @@ def get_legal_moves(fen):
     return {"moves": moves, "check": check}
 
 
-def _peek_next_position(searcher, hist, maxdepth=5):
-    """Shallow search on current position for legal moves, clutchness, best_eval.
+def _peek_next_position(searcher, hist, maxdepth=5, top_n=2):
+    """Search current position for legal moves, clutchness, best_move, best_eval.
 
-    Must be called under session lock. Reuses the session's searcher (TT benefits).
+    Uses _search_best_moves() with top_n moves evaluated. The searcher's
+    tp_move table carries over from the preceding deep search, giving
+    excellent move ordering even at shallow depth.
+
+    Must be called under session lock. Reuses the session's searcher.
     """
     pos = hist[-1]
     white_pov = len(hist) % 2 == 1
 
-    moves = _get_legal_moves_from_pos(pos, white_pov)
+    moves_dict = _get_legal_moves_from_pos(pos, white_pov)
     check = can_kill_king(pos.rotate())
 
-    # Shallow search for clutchness + best_eval
-    result = _search_best_moves(searcher, hist, 0, maxdepth, 2, [])
+    # Search with at least top_n=2 for clutchness calculation
+    result = _search_best_moves(searcher, hist, 0, maxdepth, max(2, top_n), [])
+    scored = result.get("scored_moves", [])
     clutchness_val = result.get("clutchness")
-    best_eval = result["scored_moves"][0][1] if result.get("scored_moves") else None
+    best_eval = scored[0][1] if scored else None
+    best_move = result.get("bestmove")
 
-    return {
-        "legal_moves": moves,
+    peek_result = {
+        "legal_moves": moves_dict,
         "check": check,
         "clutchness": clutchness_val,
         "best_eval": best_eval,
+        "best_move": best_move,
     }
+    if top_n > 2 and scored:
+        peek_result["top_moves"] = [[m, s] for m, s in scored[:top_n]]
+    return peek_result
 
 
 def _grade_move(searcher, hist, move_str, maxdepth=8):
@@ -702,7 +712,7 @@ def apply_move(session_id, move_str, is_computer_turn=False,
 
 def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
                   top_n=1, ignore_squares=None, peek_next=False, peek_maxdepth=5,
-                  fen=None, moves_history=""):
+                  peek_top_n=2, fen=None, moves_history=""):
     """Computer plays a turn: search, apply best move, detect game over, optionally peek.
 
     All operations in a single session lock acquisition for thread safety and TT reuse.
@@ -751,7 +761,7 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
 
         # 4. Optionally peek at the next position
         if peek_next and game_over is None:
-            response["next"] = _peek_next_position(searcher, session.hist, peek_maxdepth)
+            response["next"] = _peek_next_position(searcher, session.hist, peek_maxdepth, peek_top_n)
 
         return response
 
@@ -759,7 +769,8 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
 
 
 def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
-                peek_next=False, peek_maxdepth=5, fen=None, moves_history=""):
+                peek_next=False, peek_maxdepth=5, peek_top_n=2,
+                fen=None, moves_history=""):
     """Player makes a move: validate, optionally grade, apply, detect game over, optionally peek.
 
     All operations in a single session lock acquisition.
@@ -802,7 +813,7 @@ def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
 
         # 4. Peek at next position
         if peek_next and game_over is None:
-            response["next"] = _peek_next_position(searcher, session.hist, peek_maxdepth)
+            response["next"] = _peek_next_position(searcher, session.hist, peek_maxdepth, peek_top_n)
 
         return response
 

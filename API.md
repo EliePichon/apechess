@@ -12,13 +12,13 @@ curl -X POST /newgame -d '{}'
 # 2. Opponent (computer) plays with peek_next — one call does everything
 curl -X POST /turn -d '{ "session_id": "a3f8b2c1d4e5", "maxdepth": 8, "peek_next": true }'
 # → { "move": "g1f3", "eval": 32, "check": false, "game_over": null,
-#     "next": { "legal_moves": {"e7": ["e7e5", "e7e6"], ...}, "check": false, "clutchness": 42, "best_eval": 38 } }
+#     "next": { "legal_moves": {"e7": ["e7e5", "e7e6"], ...}, "check": false, "clutchness": 42, "best_eval": 38, "best_move": "e7e6" } }
 
 # 3. Player moves (with grading + peek for next turn)
 curl -X POST /move -d '{ "session_id": "a3f8b2c1d4e5", "move": "e7e5", "grade": true, "peek_next": true }'
 # → { "status": "ok", "check": false, "game_over": null,
 #     "grade": { "player_eval": 30, "best_eval": 38, "best_move": "e7e6", "accuracy": 0.96 },
-#     "next": { "legal_moves": {...}, "check": false, "clutchness": 8, "best_eval": -12 } }
+#     "next": { "legal_moves": {...}, "check": false, "clutchness": 8, "best_eval": -12, "best_move": "g1f3" } }
 
 # 4. Next computer turn — repeat
 curl -X POST /turn -d '{ "session_id": "a3f8b2c1d4e5", "maxdepth": 8, "peek_next": true }'
@@ -95,6 +95,7 @@ Computer plays a turn. Searches for the best move, applies it to the session, de
 | `ignore_squares` | string[] | No | `[]` | Squares whose pieces cannot move |
 | `peek_next` | bool | No | `false` | Pre-compute next position's legal moves + clutchness |
 | `peek_maxdepth` | int | No | `5` | Search depth for the peek (keep shallow for speed) |
+| `peek_top_n` | int | No | `2` | Number of top moves to evaluate in peek. `2` gives `best_move` + clutchness. `3+` also returns `top_moves` array. |
 | `fen` | string | No | — | Override session position before playing (re-sync/undo) |
 | `moves` | string | No | `""` | Space-separated move history to replay after FEN override |
 
@@ -114,7 +115,9 @@ Computer plays a turn. Searches for the best move, applies it to the session, de
     },
     "check": false,
     "clutchness": 42,
-    "best_eval": 38
+    "best_eval": 38,
+    "best_move": "e7e5",
+    "top_moves": [["e7e5", 38], ["g8f6", 32], ["d7d5", 28]]
   }
 }
 ```
@@ -131,11 +134,15 @@ Computer plays a turn. Searches for the best move, applies it to the session, de
 | `next.check` | Whether the next side to move is in check |
 | `next.clutchness` | Clutchness of the next position (shallow search) |
 | `next.best_eval` | Eval of the best move in the next position |
+| `next.best_move` | Best move in the next position (for instant puzzle grading) |
+| `next.top_moves` | Only when `peek_top_n > 2`. Array of `[move, score]` pairs, best first. Useful for clue highlights. |
 
 **Notes:**
 - The `peek_next` shallow search adds ~50-150ms to the response — negligible compared to the main search
 - When `game_over` is not `null`, there is no `next` block (no legal moves to show)
-- The transposition table from the main search is reused for the peek, making it even cheaper
+- The transposition table's move ordering (`tp_move`) from the main search carries over to the peek, improving quality
+- `best_move` enables **instant puzzle grading** — compare the player's move against it without a separate `/bestmove` call
+- `top_moves` (with `peek_top_n: 3`) enables **instant clue display** — highlight destination squares of the top moves
 
 **Errors:**
 
@@ -162,6 +169,7 @@ Apply a move to a session. Supports two modes:
 | `grade_maxdepth` | int | No | `8` | Search depth for grading |
 | `peek_next` | bool | No | `false` | Pre-compute next position's legal moves + clutchness |
 | `peek_maxdepth` | int | No | `5` | Search depth for the peek |
+| `peek_top_n` | int | No | `2` | Number of top moves in peek. `3+` returns `top_moves` array. |
 | `computer_turn` | bool | No | `false` | *(Legacy)* Auto-compute bestmoves + clutchness after applying |
 | `maxdepth` | int | No | `15` | *(Legacy)* Search depth for auto-compute |
 | `movetime` | int | No | — | *(Legacy)* Time limit in milliseconds for auto-compute |
@@ -186,7 +194,8 @@ Apply a move to a session. Supports two modes:
     "legal_moves": { "g1": ["g1f3"] },
     "check": false,
     "clutchness": 8,
-    "best_eval": -12
+    "best_eval": -12,
+    "best_move": "g1f3"
   }
 }
 ```
@@ -457,17 +466,18 @@ Scores are in centipawns (1 pawn = 100). Positive means the side to move is ahea
 ```
 POST /newgame                                        → session_id
 
-# Opponent turn — computer plays, peeks ahead
+# Opponent turn — computer plays, peeks ahead (includes best_move for grading)
 POST /turn { session_id, maxdepth: 12,
-             peek_next: true }                       → move + next.legal_moves + next.clutchness
+             peek_next: true }                       → move + next.legal_moves + next.clutchness + next.best_move
 
 # Decision: is next.clutchness high enough for a puzzle?
 #   YES → show legal_moves instantly (already have them), player moves
+#         Compare player's move against next.best_move for instant grading
 #   NO  → auto-play for the player with another /turn
 
-# Player puzzle — player moves, grade + peek for next turn
+# Player puzzle — player moves, peek for next turn (grade already available from peek)
 POST /move { session_id, move: "e7e5",
-             grade: true, peek_next: true }          → grade + next.legal_moves + next.clutchness
+             peek_next: true }                       → next.legal_moves + next.clutchness + next.best_move
 
 # Next opponent turn — repeat
 POST /turn { session_id, maxdepth: 12,
