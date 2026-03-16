@@ -1,4 +1,4 @@
-.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-perf test-session-perf test-depth test-movetime help up down logs
+.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-clutchness test-perf test-session-perf test-depth test-movetime help up down logs
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  make test-rock-landing - Run powered pieces (rock-landing) tests"
 	@echo "  make test-session  - Run session/stateful engine tests"
 	@echo "  make test-dream    - Run Dream API tests (/turn + grade/peek)"
+	@echo "  make test-clutchness - Run clutchness validation + calibration tests"
 	@echo "  make test-perf     - Run performance benchmarks"
 	@echo "  make test-session-perf - Session vs stateless TP reuse benchmark"
 	@echo "  make test-depth    - Run depth performance analysis (15-20 min)"
@@ -63,6 +64,11 @@ test-session:
 test-dream:
 	@echo "Running Dream API tests..."
 	python3 tests/test_dream_api.py
+
+# Run clutchness validation + calibration tests
+test-clutchness:
+	@echo "Running clutchness validation and calibration tests..."
+	python3 tests/test_clutchness.py
 
 # Run performance benchmarks
 test-perf:
