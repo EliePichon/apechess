@@ -69,11 +69,11 @@ Computer turns = `/turn`. Player turns = `/move`. That's it.
 
 ```
 POST /newgame { fen? } → { session_id }
-POST /turn { session_id, peek_next?, peek_top_n? } → { move, eval, check, game_over, next? }
-POST /move { session_id, move, grade?, peek_next?, peek_top_n? } → { status, check, game_over, grade?, next? }
+POST /turn { session_id, peek_next? } → { move, eval, check, game_over, next? }
+POST /move { session_id, move, grade?, peek_next? } → { status, check, game_over, grade?, next? }
 ```
 
-`peek_next` piggybacks a shallow search (~50-150ms) to pre-compute the next position's legal moves + clutchness + best_move, enabling instant puzzle triggers and grading without extra API calls. `peek_top_n` (default 2) controls how many top moves are evaluated; set to 3+ to also get a `top_moves` array for clue features.
+`peek_next` piggybacks a shallow search (~50-150ms) to pre-compute the next position's legal moves + clutchness + best_move, enabling instant puzzle triggers and grading without extra API calls.
 
 ### Legacy Session Workflow
 
@@ -90,14 +90,14 @@ Any session endpoint accepts optional `fen` to override/re-sync position.
 
 - `POST /newgame` — Create session. Optional `fen` (defaults to starting position). Returns `{session_id: string}`.
 - `POST /turn` — Computer plays a turn. Searches for best move, applies it to session, detects game state.
-  - Params: `session_id`, `maxdepth` (default 15), `movetime`, `precision` (0=strongest), `top_n` (default 1), `ignore_squares`, `peek_next` (bool), `peek_maxdepth` (default 5), `peek_top_n` (default 2)
-  - Returns `{move, eval, check, game_over, next?: {legal_moves, check, clutchness, best_eval, best_move, top_moves?}}`
+  - Params: `session_id`, `maxdepth` (default 15), `movetime`, `precision` (0=strongest), `top_n` (default 1), `ignore_squares`, `peek_next` (bool), `peek_maxdepth` (default 5)
+  - Returns `{move, eval, check, game_over, next?: {legal_moves, check, clutchness, best_eval, best_move}}`
   - `game_over`: `null`, `"checkmate"`, or `"stalemate"`
   - `next` block only present when `peek_next: true` and `game_over` is null
   - `next.best_move`: best move for the next side (enables instant puzzle grading)
-  - `next.top_moves`: only when `peek_top_n > 2`, array of `[move, score]` pairs
+
 - `POST /move` — Apply move to session. Two paths:
-  - **Dream API** (when `grade` or `peek_next` set): `session_id`, `move`, `grade` (bool), `peek_next` (bool), `peek_maxdepth` (default 5), `peek_top_n` (default 2). Returns `{status, check, game_over, grade?: {player_eval, best_eval, best_move, accuracy}, next?: {legal_moves, check, clutchness, best_eval, best_move, top_moves?}}`
+  - **Dream API** (when `grade` or `peek_next` set): `session_id`, `move`, `grade` (bool), `peek_next` (bool), `peek_maxdepth` (default 5). Returns `{status, check, game_over, grade?: {player_eval, best_eval, best_move, accuracy}, next?: {legal_moves, check, clutchness, best_eval, best_move}}`
   - **Legacy** (no grade/peek): `session_id`, `move`, `computer_turn` (bool), `maxdepth`, `movetime`, `fen` (override). Returns `{status, check, bestmoves?, clutchness?}`
 - `POST /evalmoves` — All legal moves with per-move eval scores. Params: `session_id` or `fen`, `maxdepth` (default 8). Returns `{moves: {square: [{move, eval}]}, check, clutchness}`.
 - `POST /getmoves` — Returns `{moves: {square: [move_strings]}, check: bool}`
