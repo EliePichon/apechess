@@ -24,6 +24,20 @@ logger = logging.getLogger(__name__)
 DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
+def _tt_lookup(searcher, pos, final_depth, min_depth=1):
+    """Look up position score from transposition table across depth range.
+
+    Returns the score (negated, from opponent's perspective) or None if not found.
+    """
+    for check_depth in range(final_depth - 1, min_depth - 1, -1):
+        entry = searcher.tp_score.get((pos, check_depth, True), None)
+        if entry is not None:
+            bound_width = entry.upper - entry.lower
+            if bound_width < 1000:
+                return -((entry.lower + entry.upper) // 2)
+    return None
+
+
 class GameSession:
     TP_MOVE_CAP = 100_000
     EXPIRE_SECONDS = 1800  # 30 minutes
@@ -263,15 +277,8 @@ def _grade_move(searcher, hist, move_str, maxdepth=8):
     new_pos = pos.move(player_move_obj)
 
     # Try TT lookup first
-    player_eval = None
     final_depth = result.get("depth_reached", 1)
-    for check_depth in range(final_depth - 1, 0, -1):
-        entry = searcher.tp_score.get((new_pos, check_depth, True), None)
-        if entry is not None:
-            bound_width = entry.upper - entry.lower
-            if bound_width < 1000:
-                player_eval = -((entry.lower + entry.upper) // 2)
-                break
+    player_eval = _tt_lookup(searcher, new_pos, final_depth)
 
     # Fallback: shallow search
     if player_eval is None:
@@ -363,14 +370,7 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
         for m in legal_moves:
             new_pos = pos.move(m)
             move_str = render_move(m, len(hist) % 2 == 1)
-            score = None
-            for check_depth in range(final_depth - 1, 0, -1):
-                entry = searcher.tp_score.get((new_pos, check_depth, True), None)
-                if entry is not None:
-                    bound_width = entry.upper - entry.lower
-                    if bound_width < 1000:
-                        score = -((entry.lower + entry.upper) // 2)
-                        break
+            score = _tt_lookup(searcher, new_pos, final_depth)
             if score is None:
                 score = pos.value(m)
             quick_scored.append((m, move_str, score, new_pos))
@@ -383,14 +383,7 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
         # Step 3c: Deep evaluation for top candidates
         shallow_depth = max(3, final_depth - 3)
         for m, move_str, quick_score, new_pos in top_candidates:
-            score = None
-            for check_depth in range(final_depth - 1, max(0, final_depth - 3), -1):
-                entry = searcher.tp_score.get((new_pos, check_depth, True), None)
-                if entry is not None:
-                    bound_width = entry.upper - entry.lower
-                    if bound_width < 1000:
-                        score = -((entry.lower + entry.upper) // 2)
-                        break
+            score = _tt_lookup(searcher, new_pos, final_depth, min_depth=max(1, final_depth - 2))
             if score is None and shallow_depth > 0:
                 try:
                     score = -searcher.bound(new_pos, 0, shallow_depth, can_null=True)
@@ -639,16 +632,7 @@ def _evaluate_all_moves(searcher, hist, max_movetime, max_depth):
 
     for m in legal_moves:
         new_pos = pos.move(m)
-        score = None
-
-        # Try TT lookup at various depths
-        for check_depth in range(final_depth - 1, 0, -1):
-            entry = searcher.tp_score.get((new_pos, check_depth, True), None)
-            if entry is not None:
-                bound_width = entry.upper - entry.lower
-                if bound_width < 1000:
-                    score = -((entry.lower + entry.upper) // 2)
-                    break
+        score = _tt_lookup(searcher, new_pos, final_depth)
 
         # Fallback: shallow search
         if score is None:
