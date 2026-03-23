@@ -21,6 +21,13 @@ CORS(app,
                r"/session/stats": {"origins": "*"},
                r"/health": {"origins": "*"}})
 
+def validate_fen(fen):
+    """Return a 400 error response if FEN is invalid, or None if OK."""
+    fen_parts = fen.split()
+    if len(fen_parts) < 2:
+        return jsonify({"error": "Invalid FEN string"}), 400
+    return None
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
@@ -39,9 +46,9 @@ def get_moves_endpoint():
         return jsonify({"error": "Missing 'fen' field"}), 400
 
     fen = data["fen"]
-    fen_parts = fen.split()
-    if len(fen_parts) < 2:
-        return jsonify({"error": "Invalid FEN string"}), 400
+    err = validate_fen(fen)
+    if err:
+        return err
 
     try:
         result = engine.get_legal_moves(fen)
@@ -73,9 +80,9 @@ def bestmove_endpoint():
         return jsonify({"error": "Either 'fen' or 'session_id' is required"}), 400
 
     if fen:
-        fen_parts = fen.split()
-        if len(fen_parts) < 2:
-            return jsonify({"error": "Invalid FEN string"}), 400
+        err = validate_fen(fen)
+        if err:
+            return err
 
     movetime = data.get("movetime", None)
     maxdepth = data.get("maxdepth", None)
@@ -144,9 +151,9 @@ def new_game_endpoint():
     fen = data.get("fen")
 
     if fen:
-        fen_parts = fen.split()
-        if len(fen_parts) < 2:
-            return jsonify({"error": "Invalid FEN string"}), 400
+        err = validate_fen(fen)
+        if err:
+            return err
 
     try:
         session_id = engine.create_session(fen)
@@ -295,9 +302,9 @@ def eval_moves_endpoint():
         return jsonify({"error": "Either 'fen' or 'session_id' is required"}), 400
 
     if fen:
-        fen_parts = fen.split()
-        if len(fen_parts) < 2:
-            return jsonify({"error": "Invalid FEN string"}), 400
+        err = validate_fen(fen)
+        if err:
+            return err
 
     maxdepth = data.get("maxdepth", 8)
     movetime = data.get("movetime", None)
