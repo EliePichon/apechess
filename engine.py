@@ -464,6 +464,28 @@ def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"
     return can_kill_king(new_position.rotate())
 
 
+def _resolve_context(session_id, fen, moves_history, search_fn):
+    """Resolve session or stateless context and run a search.
+
+    Returns (result, hist) on success, or (error_dict, status_code) on failure.
+    """
+    if session_id:
+        session = get_session(session_id)
+        if session is None:
+            return {"error": "Invalid or expired session_id"}, 404
+        if fen:
+            session.override_fen(fen, moves_history)
+        result = session.run_search(search_fn)
+        return result, session.hist
+    else:
+        if not fen:
+            return {"error": "Either fen or session_id is required"}, 400
+        hist = build_history(fen, moves_history)
+        searcher = sunfish.Searcher()
+        result = search_fn(searcher, hist)
+        return result, hist
+
+
 def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
                    precision=0.0, top_n=1, ignore_squares=None,
                    session_id=None, clutchness=False):
@@ -482,32 +504,17 @@ def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
     if movetime:
         max_movetime = movetime / 1000.0
 
-    if session_id:
-        session = get_session(session_id)
-        if session is None:
-            return {"error": "Invalid or expired session_id"}, 404
-        if fen:
-            session.override_fen(fen, moves_history)
-
-        def do_search(searcher, hist):
-            searcher.precision = precision
-            return _search_best_moves(
-                searcher, hist, max_movetime, maxdepth,
-                internal_top_n, ignore_squares or []
-            )
-
-        result = session.run_search(do_search)
-        hist = session.hist
-    else:
-        if not fen:
-            return {"error": "Either fen or session_id is required"}, 400
-        hist = build_history(fen, moves_history)
-        searcher = sunfish.Searcher()
+    def do_search(searcher, hist):
         searcher.precision = precision
-        result = _search_best_moves(
+        return _search_best_moves(
             searcher, hist, max_movetime, maxdepth,
             internal_top_n, ignore_squares or []
         )
+
+    resolved = _resolve_context(session_id, fen, moves_history, do_search)
+    if isinstance(resolved[1], int):
+        return resolved
+    result, hist = resolved
 
     if result["bestmove"] == "(none)":
         return {"bestmoves": [], "check": False}
@@ -547,26 +554,14 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
     if movetime:
         max_movetime = movetime / 1000.0
 
-    if session_id:
-        session = get_session(session_id)
-        if session is None:
-            return {"error": "Invalid or expired session_id"}, 404
-        if fen:
-            session.override_fen(fen, moves_history)
-
-        def do_eval(searcher, hist):
-            searcher.precision = 0.0
-            return _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
-
-        result = session.run_search(do_eval)
-        hist = session.hist
-    else:
-        if not fen:
-            return {"error": "Either fen or session_id is required"}, 400
-        hist = build_history(fen, moves_history)
-        searcher = sunfish.Searcher()
+    def do_eval(searcher, hist):
         searcher.precision = 0.0
-        result = _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
+        return _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
+
+    resolved = _resolve_context(session_id, fen, moves_history, do_eval)
+    if isinstance(resolved[1], int):
+        return resolved
+    result, hist = resolved
 
     # Determine side to move for coordinate rendering
     white_pov = len(hist) % 2 == 1
