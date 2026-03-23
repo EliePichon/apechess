@@ -238,8 +238,7 @@ def main():
     results.append(test_moves(
         fen="8/8/8/8/3O4/8/2RT4/8 w - - 0 1",
         square_from="c2",
-        expected_present=["c3"],
-        expected_absent=["c4"],  # no rock in c-file; just check normal rook works
+        expected_present=["c3", "c4"],  # no rock in c-file, rook slides freely
         description="Normal Rook at c2 works normally alongside powered Rook"
     ))
 
