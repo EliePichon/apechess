@@ -28,6 +28,12 @@ def validate_fen(fen):
         return jsonify({"error": "Invalid FEN string"}), 400
     return None
 
+def _engine_response(result):
+    """Convert engine result to Flask response, unwrapping error tuples."""
+    if isinstance(result, tuple):
+        return jsonify(result[0]), result[1]
+    return jsonify(result)
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
@@ -110,9 +116,7 @@ def bestmove_endpoint():
             session_id=session_id,
             clutchness=clutchness,
         )
-        if isinstance(result, tuple):
-            return jsonify(result[0]), result[1]
-        return jsonify(result)
+        return _engine_response(result)
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
@@ -222,9 +226,7 @@ def move_endpoint():
                 fen=fen,
                 moves_history=moves_history,
             )
-        if isinstance(result, tuple):
-            return jsonify(result[0]), result[1]
-        return jsonify(result)
+        return _engine_response(result)
     except Exception as e:
         logger.error(f"Error processing move: {e}")
         return jsonify({"error": str(e)}), 500
@@ -273,9 +275,7 @@ def turn_endpoint():
             fen=fen,
             moves_history=moves_history,
         )
-        if isinstance(result, tuple):
-            return jsonify(result[0]), result[1]
-        return jsonify(result)
+        return _engine_response(result)
     except Exception as e:
         logger.error(f"Error processing turn: {e}")
         return jsonify({"error": str(e)}), 500
@@ -318,9 +318,7 @@ def eval_moves_endpoint():
             movetime=movetime,
             session_id=session_id,
         )
-        if isinstance(result, tuple):
-            return jsonify(result[0]), result[1]
-        return jsonify(result)
+        return _engine_response(result)
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
