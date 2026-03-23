@@ -9,7 +9,7 @@ import time
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 # Test positions for different game phases
 TEST_POSITIONS = {

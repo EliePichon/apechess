@@ -7,41 +7,28 @@ import requests
 import json
 import time
 
-BASE_URL = "http://localhost:5500"
-START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-MIDDLEGAME_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+from helpers import BASE_URL, START_FEN, MIDDLEGAME_FEN, TestTracker
 
-passed = 0
-failed = 0
-
-
-def test(name, condition, detail=""):
-    global passed, failed
-    if condition:
-        print(f"  PASS  {name}")
-        passed += 1
-    else:
-        print(f"  FAIL  {name} — {detail}")
-        failed += 1
+t = TestTracker()
 
 
 def test_newgame_returns_session_id():
     print("\n--- Test: /newgame returns session_id ---")
     r = requests.post(f"{BASE_URL}/newgame", json={})
-    test("/newgame returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/newgame returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("response has session_id", "session_id" in data, f"keys: {list(data.keys())}")
-    test("session_id is a string", isinstance(data.get("session_id"), str))
-    test("session_id is non-empty", len(data.get("session_id", "")) > 0)
+    t.test("response has session_id", "session_id" in data, f"keys: {list(data.keys())}")
+    t.test("session_id is a string", isinstance(data.get("session_id"), str))
+    t.test("session_id is non-empty", len(data.get("session_id", "")) > 0)
     return data.get("session_id")
 
 
 def test_newgame_with_fen():
     print("\n--- Test: /newgame with custom FEN ---")
     r = requests.post(f"{BASE_URL}/newgame", json={"fen": MIDDLEGAME_FEN})
-    test("/newgame with FEN returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/newgame with FEN returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("response has session_id", "session_id" in data)
+    t.test("response has session_id", "session_id" in data)
     return data.get("session_id")
 
 
@@ -56,11 +43,11 @@ def test_bestmove_with_session():
         "session_id": sid,
         "maxdepth": 4,
     })
-    test("/bestmove with session returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/bestmove with session returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("response has bestmoves", "bestmoves" in data, f"keys: {list(data.keys())}")
-    test("bestmoves is non-empty", len(data.get("bestmoves", [])) > 0)
-    test("response has check field", "check" in data)
+    t.test("response has bestmoves", "bestmoves" in data, f"keys: {list(data.keys())}")
+    t.test("bestmoves is non-empty", len(data.get("bestmoves", [])) > 0)
+    t.test("response has check field", "check" in data)
 
 
 def test_bestmove_stateless_unchanged():
@@ -69,16 +56,16 @@ def test_bestmove_stateless_unchanged():
         "fen": START_FEN,
         "maxdepth": 4,
     })
-    test("stateless /bestmove returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("stateless /bestmove returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("response has bestmoves", "bestmoves" in data)
-    test("bestmoves is non-empty", len(data.get("bestmoves", [])) > 0)
+    t.test("response has bestmoves", "bestmoves" in data)
+    t.test("bestmoves is non-empty", len(data.get("bestmoves", [])) > 0)
 
 
 def test_bestmove_no_fen_no_session():
     print("\n--- Test: /bestmove without fen or session returns error ---")
     r = requests.post(f"{BASE_URL}/bestmove", json={"maxdepth": 4})
-    test("returns 400", r.status_code == 400, f"got {r.status_code}")
+    t.test("returns 400", r.status_code == 400, f"got {r.status_code}")
 
 
 def test_move_player_turn():
@@ -90,11 +77,11 @@ def test_move_player_turn():
         "session_id": sid,
         "move": "e2e4",
     })
-    test("/move returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/move returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("status is ok", data.get("status") == "ok", f"got {data.get('status')}")
-    test("has check field", "check" in data)
-    test("no bestmoves on player turn", "bestmoves" not in data)
+    t.test("status is ok", data.get("status") == "ok", f"got {data.get('status')}")
+    t.test("has check field", "check" in data)
+    t.test("no bestmoves on player turn", "bestmoves" not in data)
 
 
 def test_move_computer_turn():
@@ -112,12 +99,12 @@ def test_move_computer_turn():
         "computer_turn": True,
         "maxdepth": 4,
     })
-    test("/move computer turn returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/move computer turn returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("status is ok", data.get("status") == "ok")
-    test("has bestmoves", "bestmoves" in data, f"keys: {list(data.keys())}")
-    test("bestmoves is non-empty", len(data.get("bestmoves", [])) > 0)
-    test("has clutchness", "clutchness" in data)
+    t.test("status is ok", data.get("status") == "ok")
+    t.test("has bestmoves", "bestmoves" in data, f"keys: {list(data.keys())}")
+    t.test("bestmoves is non-empty", len(data.get("bestmoves", [])) > 0)
+    t.test("has clutchness", "clutchness" in data)
 
 
 def test_move_illegal():
@@ -129,7 +116,7 @@ def test_move_illegal():
         "session_id": sid,
         "move": "e1e5",  # Illegal: king can't move to e5 from start
     })
-    test("illegal move returns 400", r.status_code == 400, f"got {r.status_code}")
+    t.test("illegal move returns 400", r.status_code == 400, f"got {r.status_code}")
 
 
 def test_move_invalid_session():
@@ -138,7 +125,7 @@ def test_move_invalid_session():
         "session_id": "nonexistent",
         "move": "e2e4",
     })
-    test("invalid session returns 404", r.status_code == 404, f"got {r.status_code}")
+    t.test("invalid session returns 404", r.status_code == 404, f"got {r.status_code}")
 
 
 def test_fen_override():
@@ -152,9 +139,9 @@ def test_fen_override():
         "fen": MIDDLEGAME_FEN,
         "maxdepth": 4,
     })
-    test("FEN override returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("FEN override returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("returns valid bestmoves", len(data.get("bestmoves", [])) > 0)
+    t.test("returns valid bestmoves", len(data.get("bestmoves", [])) > 0)
 
 
 def test_clutchness_on_bestmove():
@@ -164,10 +151,10 @@ def test_clutchness_on_bestmove():
         "maxdepth": 6,
         "clutchness": True,
     })
-    test("returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has clutchness field", "clutchness" in data, f"keys: {list(data.keys())}")
-    test("clutchness is numeric", isinstance(data.get("clutchness"), (int, float)),
+    t.test("has clutchness field", "clutchness" in data, f"keys: {list(data.keys())}")
+    t.test("clutchness is numeric", isinstance(data.get("clutchness"), (int, float)),
          f"got {type(data.get('clutchness'))}")
 
 
@@ -178,7 +165,7 @@ def test_clutchness_not_present_without_flag():
         "maxdepth": 4,
     })
     data = r.json()
-    test("no clutchness field without flag", "clutchness" not in data,
+    t.test("no clutchness field without flag", "clutchness" not in data,
          f"keys: {list(data.keys())}")
 
 
@@ -188,21 +175,21 @@ def test_evalmoves_stateless():
         "fen": MIDDLEGAME_FEN,
         "maxdepth": 4,
     })
-    test("/evalmoves returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/evalmoves returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has moves field", "moves" in data, f"keys: {list(data.keys())}")
-    test("moves is non-empty dict", isinstance(data.get("moves"), dict) and len(data["moves"]) > 0)
-    test("has check field", "check" in data)
-    test("has clutchness field", "clutchness" in data)
+    t.test("has moves field", "moves" in data, f"keys: {list(data.keys())}")
+    t.test("moves is non-empty dict", isinstance(data.get("moves"), dict) and len(data["moves"]) > 0)
+    t.test("has check field", "check" in data)
+    t.test("has clutchness field", "clutchness" in data)
 
     # Check structure of move entries
     first_square = list(data["moves"].keys())[0]
     entries = data["moves"][first_square]
-    test("move entries are lists", isinstance(entries, list) and len(entries) > 0)
+    t.test("move entries are lists", isinstance(entries, list) and len(entries) > 0)
     first_entry = entries[0]
-    test("entry has move field", "move" in first_entry, f"keys: {list(first_entry.keys())}")
-    test("entry has eval field", "eval" in first_entry, f"keys: {list(first_entry.keys())}")
-    test("eval is numeric", isinstance(first_entry.get("eval"), (int, float)))
+    t.test("entry has move field", "move" in first_entry, f"keys: {list(first_entry.keys())}")
+    t.test("entry has eval field", "eval" in first_entry, f"keys: {list(first_entry.keys())}")
+    t.test("eval is numeric", isinstance(first_entry.get("eval"), (int, float)))
 
 
 def test_evalmoves_with_session():
@@ -214,10 +201,10 @@ def test_evalmoves_with_session():
         "session_id": sid,
         "maxdepth": 4,
     })
-    test("/evalmoves with session returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/evalmoves with session returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has moves field", "moves" in data)
-    test("moves is non-empty", len(data.get("moves", {})) > 0)
+    t.test("has moves field", "moves" in data)
+    t.test("moves is non-empty", len(data.get("moves", {})) > 0)
 
 
 def test_session_stats():
@@ -232,18 +219,18 @@ def test_session_stats():
     })
 
     r = requests.get(f"{BASE_URL}/session/stats", params={"session_id": sid})
-    test("/session/stats returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/session/stats returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has tp_move_size", "tp_move_size" in data)
-    test("tp_move_size > 0 after search", data.get("tp_move_size", 0) > 0,
+    t.test("has tp_move_size", "tp_move_size" in data)
+    t.test("tp_move_size > 0 after search", data.get("tp_move_size", 0) > 0,
          f"got {data.get('tp_move_size')}")
-    test("has ply", "ply" in data)
+    t.test("has ply", "ply" in data)
 
 
 def test_session_stats_invalid():
     print("\n--- Test: /session/stats with invalid id ---")
     r = requests.get(f"{BASE_URL}/session/stats", params={"session_id": "bogus"})
-    test("invalid session returns 404", r.status_code == 404, f"got {r.status_code}")
+    t.test("invalid session returns 404", r.status_code == 404, f"got {r.status_code}")
 
 
 def test_session_isolation():
@@ -254,18 +241,18 @@ def test_session_isolation():
     r2 = requests.post(f"{BASE_URL}/newgame", json={})
     sid2 = r2.json()["session_id"]
 
-    test("different session IDs", sid1 != sid2)
+    t.test("different session IDs", sid1 != sid2)
 
     # Apply move only to session 1
     requests.post(f"{BASE_URL}/move", json={"session_id": sid1, "move": "e2e4"})
 
     # Session 2 should still be at starting position — e2e4 should still be legal
     r = requests.post(f"{BASE_URL}/move", json={"session_id": sid2, "move": "e2e4"})
-    test("session 2 unaffected by session 1 move", r.status_code == 200, f"got {r.status_code}")
+    t.test("session 2 unaffected by session 1 move", r.status_code == 200, f"got {r.status_code}")
 
     # Session 1 should be after e2e4 — e2e4 should now be illegal
     r = requests.post(f"{BASE_URL}/move", json={"session_id": sid1, "move": "e2e4"})
-    test("session 1 position advanced (e2e4 now illegal)", r.status_code == 400,
+    t.test("session 1 position advanced (e2e4 now illegal)", r.status_code == 400,
          f"got {r.status_code}")
 
 
@@ -274,21 +261,21 @@ def test_full_game_workflow():
     # 1. Create game
     r = requests.post(f"{BASE_URL}/newgame", json={})
     sid = r.json()["session_id"]
-    test("game created", r.status_code == 200)
+    t.test("game created", r.status_code == 200)
 
     # 2. Get evals for player
     r = requests.post(f"{BASE_URL}/evalmoves", json={
         "session_id": sid,
         "maxdepth": 4,
     })
-    test("evalmoves works", r.status_code == 200)
+    t.test("evalmoves works", r.status_code == 200)
 
     # 3. Player plays e2e4
     r = requests.post(f"{BASE_URL}/move", json={
         "session_id": sid,
         "move": "e2e4",
     })
-    test("player move e2e4", r.status_code == 200)
+    t.test("player move e2e4", r.status_code == 200)
 
     # 4. Computer plays (e7e5), auto-computes response
     r = requests.post(f"{BASE_URL}/move", json={
@@ -297,18 +284,18 @@ def test_full_game_workflow():
         "computer_turn": True,
         "maxdepth": 4,
     })
-    test("computer move e7e5 with auto-compute", r.status_code == 200)
+    t.test("computer move e7e5 with auto-compute", r.status_code == 200)
     data = r.json()
-    test("auto-computed bestmoves returned", len(data.get("bestmoves", [])) > 0)
+    t.test("auto-computed bestmoves returned", len(data.get("bestmoves", [])) > 0)
 
     # 5. Get best move for next turn
     r = requests.post(f"{BASE_URL}/bestmove", json={
         "session_id": sid,
         "maxdepth": 4,
     })
-    test("bestmove after moves", r.status_code == 200)
+    t.test("bestmove after moves", r.status_code == 200)
     data = r.json()
-    test("valid bestmoves", len(data.get("bestmoves", [])) > 0)
+    t.test("valid bestmoves", len(data.get("bestmoves", [])) > 0)
 
 
 def test_turn_fen_override():
@@ -325,10 +312,10 @@ def test_turn_fen_override():
         "fen": after_e4_fen,
         "maxdepth": 4,
     })
-    test("/turn with fen override status 200", r.status_code == 200)
+    t.test("/turn with fen override status 200", r.status_code == 200)
     data = r.json()
-    test("/turn returned a move", data.get("move") is not None)
-    test("/turn game_over is null", data.get("game_over") is None)
+    t.test("/turn returned a move", data.get("move") is not None)
+    t.test("/turn game_over is null", data.get("game_over") is None)
 
 
 def test_turn_ply():
@@ -341,12 +328,12 @@ def test_turn_ply():
         "session_id": sid,
         "maxdepth": 4,
     })
-    test("/turn status 200", r.status_code == 200)
+    t.test("/turn status 200", r.status_code == 200)
     data = r.json()
-    test("/turn has ply field", "ply" in data)
-    test("/turn ply is int", isinstance(data.get("ply"), int))
+    t.test("/turn has ply field", "ply" in data)
+    t.test("/turn ply is int", isinstance(data.get("ply"), int))
     # After engine plays 1 move from start, ply should be 2 (initial + after move)
-    test("/turn ply is 2 after one move", data.get("ply") == 2)
+    t.test("/turn ply is 2 after one move", data.get("ply") == 2)
 
 
 def test_move_ply():
@@ -359,10 +346,10 @@ def test_move_ply():
         "session_id": sid,
         "move": "e2e4",
     })
-    test("/move status 200", r.status_code == 200)
+    t.test("/move status 200", r.status_code == 200)
     data = r.json()
-    test("/move has ply field", "ply" in data)
-    test("/move ply is 2 after one move", data.get("ply") == 2)
+    t.test("/move has ply field", "ply" in data)
+    t.test("/move ply is 2 after one move", data.get("ply") == 2)
 
 
 def main():
@@ -393,10 +380,10 @@ def main():
     test_move_ply()
 
     print(f"\n{'=' * 60}")
-    print(f"Results: {passed} passed, {failed} failed")
+    print(f"Results: {t.passed} passed, {t.failed} failed")
     print(f"{'=' * 60}")
 
-    if failed > 0:
+    if t.failed > 0:
         exit(1)
 
 

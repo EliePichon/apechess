@@ -6,10 +6,7 @@ Debug why Italian Opening position doesn't respect movetime.
 import requests
 import time
 
-BASE_URL = "http://localhost:5500"
-
-# The problematic position
-ITALIAN_FEN = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"
+from helpers import BASE_URL, ITALIAN_FEN
 
 print("Testing Italian Opening with different movetimes...")
 print(f"FEN: {ITALIAN_FEN}\n")

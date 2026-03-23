@@ -6,7 +6,7 @@ Test script for the ignore_squares parameter in the bestmove endpoint.
 import requests
 import json
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 def test_ignore_squares(fen, ignore_squares, description):
     """Test the bestmove endpoint with ignore_squares parameter."""

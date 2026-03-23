@@ -13,7 +13,7 @@ Character mapping:
 import requests
 import json
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 
 def test_moves(fen, square_from, expected_present=None, expected_absent=None, description=""):

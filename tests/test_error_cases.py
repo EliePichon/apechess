@@ -7,7 +7,7 @@ Helps diagnose why certain positions fail.
 import requests
 import json
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 # The positions that failed in the benchmark
 ERROR_CASES = [

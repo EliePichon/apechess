@@ -7,15 +7,10 @@ over a ~20-move self-play game.
 
 import requests
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL, create_session
+
 MAX_MOVES = 20
 MAXDEPTH = 6
-
-
-def create_session():
-    r = requests.post(f"{BASE_URL}/newgame", json={})
-    r.raise_for_status()
-    return r.json()["session_id"]
 
 
 def session_run():

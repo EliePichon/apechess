@@ -10,26 +10,9 @@ All values printed for human review. No hard assertions on specific clutchness v
 
 import requests
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL, create_session, TestTracker
 
-passed = 0
-failed = 0
-
-
-def test(name, condition, detail=""):
-    global passed, failed
-    if condition:
-        print(f"  PASS  {name}")
-        passed += 1
-    else:
-        print(f"  FAIL  {name} — {detail}")
-        failed += 1
-
-
-def create_session(fen=None):
-    body = {"fen": fen} if fen else {}
-    r = requests.post(f"{BASE_URL}/newgame", json=body)
-    return r.json()["session_id"]
+t = TestTracker()
 
 
 def extract_top_two_evals(moves_dict):
@@ -96,17 +79,17 @@ def run_part1():
             "peek_next": True,
             "peek_maxdepth": 5,
         })
-        test(f"[{label}] /turn returns 200", r.status_code == 200, f"got {r.status_code}")
+        t.test(f"[{label}] /turn returns 200", r.status_code == 200, f"got {r.status_code}")
         turn_data = r.json()
 
-        test(f"[{label}] /turn has next block", "next" in turn_data,
+        t.test(f"[{label}] /turn has next block", "next" in turn_data,
              f"keys: {list(turn_data.keys())}")
         nxt = turn_data.get("next", {})
-        test(f"[{label}] next has clutchness field", "clutchness" in nxt,
+        t.test(f"[{label}] next has clutchness field", "clutchness" in nxt,
              f"next keys: {list(nxt.keys())}")
 
         peek_clutchness = nxt.get("clutchness")
-        test(f"[{label}] peek clutchness is numeric or null",
+        t.test(f"[{label}] peek clutchness is numeric or null",
              peek_clutchness is None or isinstance(peek_clutchness, (int, float)),
              f"got {peek_clutchness!r}")
 
@@ -115,13 +98,13 @@ def run_part1():
             "session_id": sid,
             "maxdepth": 5,
         })
-        test(f"[{label}] /evalmoves returns 200", r2.status_code == 200, f"got {r2.status_code}")
+        t.test(f"[{label}] /evalmoves returns 200", r2.status_code == 200, f"got {r2.status_code}")
         eval_data = r2.json()
 
-        test(f"[{label}] /evalmoves has clutchness field", "clutchness" in eval_data,
+        t.test(f"[{label}] /evalmoves has clutchness field", "clutchness" in eval_data,
              f"keys: {list(eval_data.keys())}")
         eval_clutchness = eval_data.get("clutchness")
-        test(f"[{label}] evalmoves clutchness is numeric or null",
+        t.test(f"[{label}] evalmoves clutchness is numeric or null",
              eval_clutchness is None or isinstance(eval_clutchness, (int, float)),
              f"got {eval_clutchness!r}")
 
@@ -251,17 +234,17 @@ def run_part2():
             "maxdepth": 5,
         })
 
-        test(f"[{i}. {label}] /evalmoves returns 200",
+        t.test(f"[{i}. {label}] /evalmoves returns 200",
              r.status_code == 200, f"got {r.status_code}")
         data = r.json()
 
-        test(f"[{i}. {label}] has clutchness", "clutchness" in data,
+        t.test(f"[{i}. {label}] has clutchness", "clutchness" in data,
              f"keys: {list(data.keys())}")
-        test(f"[{i}. {label}] has moves", "moves" in data,
+        t.test(f"[{i}. {label}] has moves", "moves" in data,
              f"keys: {list(data.keys())}")
 
         clutchness = data.get("clutchness")
-        test(f"[{i}. {label}] clutchness is numeric",
+        t.test(f"[{i}. {label}] clutchness is numeric",
              isinstance(clutchness, (int, float)),
              f"got {clutchness!r} (type {type(clutchness).__name__})")
 
@@ -289,10 +272,10 @@ def main():
     run_part2()
 
     print(f"{'=' * 70}")
-    print(f"Structural checks: {passed} passed, {failed} failed")
+    print(f"Structural checks: {t.passed} passed, {t.failed} failed")
     print(f"{'=' * 70}")
 
-    if failed > 0:
+    if t.failed > 0:
         exit(1)
 
 

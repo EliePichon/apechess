@@ -9,7 +9,7 @@ import timeit
 import statistics
 from typing import Dict, List, Tuple
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 # Test position (middlegame position with tactical complexity)
 TEST_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"

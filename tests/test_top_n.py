@@ -7,7 +7,7 @@ import requests
 import json
 import time
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 def test_bestmove_top_n(fen, top_n, description):
     """Test the bestmove endpoint with different top_n values."""

@@ -11,7 +11,7 @@ Rocks are neutral pieces that:
 import requests
 import json
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 def test_rock_blocks_sliding_piece(fen, piece_name, square_from, blocked_squares, allowed_squares, description):
     """Test that rocks block sliding pieces (rook, bishop, queen)."""

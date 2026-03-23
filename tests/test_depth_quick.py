@@ -4,7 +4,7 @@
 import requests
 import json
 
-BASE_URL = "http://localhost:5500"
+from helpers import BASE_URL
 
 # Simple starting position
 TEST_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"

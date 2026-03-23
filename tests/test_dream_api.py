@@ -6,9 +6,7 @@ Integration tests for Dream API: /turn endpoint and updated /move with grade/pee
 import requests
 import json
 
-BASE_URL = "http://localhost:5500"
-START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-MIDDLEGAME_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+from helpers import BASE_URL, START_FEN, MIDDLEGAME_FEN, create_session, TestTracker
 
 # Checkmate in 1: white Qh5 to f7 is checkmate (Scholar's mate setup)
 # After Qf7, black king has no escape
@@ -18,24 +16,7 @@ MATE_IN_1_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq -
 # Black to move, no legal moves, not in check
 STALEMATE_FEN = "k7/8/1Q6/8/8/8/8/2K5 b - - 0 1"
 
-passed = 0
-failed = 0
-
-
-def test(name, condition, detail=""):
-    global passed, failed
-    if condition:
-        print(f"  PASS  {name}")
-        passed += 1
-    else:
-        print(f"  FAIL  {name} — {detail}")
-        failed += 1
-
-
-def create_session(fen=None):
-    body = {"fen": fen} if fen else {}
-    r = requests.post(f"{BASE_URL}/newgame", json=body)
-    return r.json()["session_id"]
+t = TestTracker()
 
 
 def test_turn_basic():
@@ -46,17 +27,17 @@ def test_turn_basic():
         "session_id": sid,
         "maxdepth": 4,
     })
-    test("/turn returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/turn returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has move field", "move" in data, f"keys: {list(data.keys())}")
-    test("move is a string", isinstance(data.get("move"), str))
-    test("move is 4-5 chars", len(data.get("move", "")) in (4, 5), f"got '{data.get('move')}'")
-    test("has eval field", "eval" in data)
-    test("has check field", "check" in data)
-    test("check is bool", isinstance(data.get("check"), bool))
-    test("has game_over field", "game_over" in data)
-    test("game_over is null for opening", data.get("game_over") is None, f"got {data.get('game_over')}")
-    test("no next without peek_next", "next" not in data, f"keys: {list(data.keys())}")
+    t.test("has move field", "move" in data, f"keys: {list(data.keys())}")
+    t.test("move is a string", isinstance(data.get("move"), str))
+    t.test("move is 4-5 chars", len(data.get("move", "")) in (4, 5), f"got '{data.get('move')}'")
+    t.test("has eval field", "eval" in data)
+    t.test("has check field", "check" in data)
+    t.test("check is bool", isinstance(data.get("check"), bool))
+    t.test("has game_over field", "game_over" in data)
+    t.test("game_over is null for opening", data.get("game_over") is None, f"got {data.get('game_over')}")
+    t.test("no next without peek_next", "next" not in data, f"keys: {list(data.keys())}")
 
 
 def test_turn_with_peek():
@@ -69,22 +50,22 @@ def test_turn_with_peek():
         "peek_next": True,
         "peek_maxdepth": 4,
     })
-    test("/turn with peek returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/turn with peek returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has next block", "next" in data, f"keys: {list(data.keys())}")
+    t.test("has next block", "next" in data, f"keys: {list(data.keys())}")
 
     nxt = data.get("next", {})
-    test("next has legal_moves", "legal_moves" in nxt, f"next keys: {list(nxt.keys())}")
-    test("legal_moves is non-empty dict", isinstance(nxt.get("legal_moves"), dict) and len(nxt["legal_moves"]) > 0)
-    test("next has check", "check" in nxt)
-    test("next has clutchness", "clutchness" in nxt)
-    test("clutchness is numeric", isinstance(nxt.get("clutchness"), (int, float, type(None))))
-    test("next has best_eval", "best_eval" in nxt)
+    t.test("next has legal_moves", "legal_moves" in nxt, f"next keys: {list(nxt.keys())}")
+    t.test("legal_moves is non-empty dict", isinstance(nxt.get("legal_moves"), dict) and len(nxt["legal_moves"]) > 0)
+    t.test("next has check", "check" in nxt)
+    t.test("next has clutchness", "clutchness" in nxt)
+    t.test("clutchness is numeric", isinstance(nxt.get("clutchness"), (int, float, type(None))))
+    t.test("next has best_eval", "best_eval" in nxt)
 
     # Verify legal_moves structure: {square: [move_str, ...]}
     first_sq = list(nxt["legal_moves"].keys())[0]
     moves = nxt["legal_moves"][first_sq]
-    test("moves are list of strings", isinstance(moves, list) and isinstance(moves[0], str))
+    t.test("moves are list of strings", isinstance(moves, list) and isinstance(moves[0], str))
 
 
 def test_turn_applies_move():
@@ -101,7 +82,7 @@ def test_turn_applies_move():
     # Check ply after
     r = requests.get(f"{BASE_URL}/session/stats", params={"session_id": sid})
     ply_after = r.json()["ply"]
-    test("ply incremented by 1", ply_after == ply_before + 1,
+    t.test("ply incremented by 1", ply_after == ply_before + 1,
          f"before={ply_before}, after={ply_after}")
 
 
@@ -111,7 +92,7 @@ def test_turn_invalid_session():
         "session_id": "nonexistent",
         "maxdepth": 4,
     })
-    test("invalid session returns 404", r.status_code == 404, f"got {r.status_code}")
+    t.test("invalid session returns 404", r.status_code == 404, f"got {r.status_code}")
 
 
 def test_turn_with_precision():
@@ -123,9 +104,9 @@ def test_turn_with_precision():
         "maxdepth": 4,
         "precision": 0.2,
     })
-    test("/turn with precision returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/turn with precision returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("move returned", data.get("move") is not None)
+    t.test("move returned", data.get("move") is not None)
 
 
 def test_move_with_grade():
@@ -137,22 +118,22 @@ def test_move_with_grade():
         "move": "e2e4",
         "grade": True,
     })
-    test("/move with grade returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/move with grade returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("status is ok", data.get("status") == "ok")
-    test("has check field", "check" in data)
-    test("has game_over field", "game_over" in data)
-    test("has grade block", "grade" in data, f"keys: {list(data.keys())}")
+    t.test("status is ok", data.get("status") == "ok")
+    t.test("has check field", "check" in data)
+    t.test("has game_over field", "game_over" in data)
+    t.test("has grade block", "grade" in data, f"keys: {list(data.keys())}")
 
     grade = data.get("grade", {})
-    test("grade has player_eval", "player_eval" in grade)
-    test("grade has best_eval", "best_eval" in grade)
-    test("grade has best_move", "best_move" in grade)
-    test("grade has accuracy", "accuracy" in grade)
-    test("accuracy is 0-1", 0 <= grade.get("accuracy", -1) <= 1,
+    t.test("grade has player_eval", "player_eval" in grade)
+    t.test("grade has best_eval", "best_eval" in grade)
+    t.test("grade has best_move", "best_move" in grade)
+    t.test("grade has accuracy", "accuracy" in grade)
+    t.test("accuracy is 0-1", 0 <= grade.get("accuracy", -1) <= 1,
          f"got {grade.get('accuracy')}")
-    test("player_eval is numeric", isinstance(grade.get("player_eval"), (int, float)))
-    test("best_eval is numeric", isinstance(grade.get("best_eval"), (int, float)))
+    t.test("player_eval is numeric", isinstance(grade.get("player_eval"), (int, float)))
+    t.test("best_eval is numeric", isinstance(grade.get("best_eval"), (int, float)))
 
 
 def test_move_with_peek():
@@ -165,16 +146,16 @@ def test_move_with_peek():
         "peek_next": True,
         "peek_maxdepth": 4,
     })
-    test("/move with peek returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("/move with peek returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has next block", "next" in data, f"keys: {list(data.keys())}")
+    t.test("has next block", "next" in data, f"keys: {list(data.keys())}")
 
     nxt = data.get("next", {})
-    test("next has legal_moves", "legal_moves" in nxt)
-    test("legal_moves is non-empty", len(nxt.get("legal_moves", {})) > 0)
-    test("next has check", "check" in nxt)
-    test("next has clutchness", "clutchness" in nxt)
-    test("next has best_eval", "best_eval" in nxt)
+    t.test("next has legal_moves", "legal_moves" in nxt)
+    t.test("legal_moves is non-empty", len(nxt.get("legal_moves", {})) > 0)
+    t.test("next has check", "check" in nxt)
+    t.test("next has clutchness", "clutchness" in nxt)
+    t.test("next has best_eval", "best_eval" in nxt)
 
 
 def test_move_with_grade_and_peek():
@@ -188,11 +169,11 @@ def test_move_with_grade_and_peek():
         "peek_next": True,
         "peek_maxdepth": 4,
     })
-    test("returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("has grade", "grade" in data)
-    test("has next", "next" in data)
-    test("has game_over", "game_over" in data)
+    t.test("has grade", "grade" in data)
+    t.test("has next", "next" in data)
+    t.test("has game_over", "game_over" in data)
 
 
 def test_move_backward_compatible():
@@ -203,13 +184,13 @@ def test_move_backward_compatible():
         "session_id": sid,
         "move": "e2e4",
     })
-    test("returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("status is ok", data.get("status") == "ok")
-    test("has check", "check" in data)
+    t.test("status is ok", data.get("status") == "ok")
+    t.test("has check", "check" in data)
     # Legacy path: no game_over, no grade, no next
-    test("no grade", "grade" not in data)
-    test("no next", "next" not in data)
+    t.test("no grade", "grade" not in data)
+    t.test("no next", "next" not in data)
 
 
 def test_game_over_checkmate():
@@ -223,12 +204,12 @@ def test_game_over_checkmate():
         "move": "h5f7",
         "peek_next": True,
     })
-    test("mating move returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("mating move returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("game_over is checkmate", data.get("game_over") == "checkmate",
+    t.test("game_over is checkmate", data.get("game_over") == "checkmate",
          f"got {data.get('game_over')}")
-    test("check is true", data.get("check") is True, f"got {data.get('check')}")
-    test("no next on game_over", "next" not in data, f"keys: {list(data.keys())}")
+    t.test("check is true", data.get("check") is True, f"got {data.get('check')}")
+    t.test("no next on game_over", "next" not in data, f"keys: {list(data.keys())}")
 
 
 def test_game_over_stalemate():
@@ -242,11 +223,11 @@ def test_game_over_stalemate():
         "session_id": sid,
         "maxdepth": 4,
     })
-    test("stalemate returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("stalemate returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("game_over is stalemate", data.get("game_over") == "stalemate",
+    t.test("game_over is stalemate", data.get("game_over") == "stalemate",
          f"got {data.get('game_over')}")
-    test("move is null", data.get("move") is None, f"got {data.get('move')}")
+    t.test("move is null", data.get("move") is None, f"got {data.get('move')}")
 
 
 def test_game_over_via_turn():
@@ -259,12 +240,12 @@ def test_game_over_via_turn():
         "session_id": sid,
         "maxdepth": 6,
     })
-    test("returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
     # Engine should find the mating move
-    test("move is h5f7", data.get("move") == "h5f7",
+    t.test("move is h5f7", data.get("move") == "h5f7",
          f"got {data.get('move')}")
-    test("game_over is checkmate", data.get("game_over") == "checkmate",
+    t.test("game_over is checkmate", data.get("game_over") == "checkmate",
          f"got {data.get('game_over')}")
 
 
@@ -279,12 +260,12 @@ def test_full_dream_workflow():
         "peek_next": True,
         "peek_maxdepth": 4,
     })
-    test("turn 1 returns 200", r.status_code == 200)
+    t.test("turn 1 returns 200", r.status_code == 200)
     data = r.json()
-    test("turn 1 has move", data.get("move") is not None)
-    test("turn 1 has next", "next" in data)
+    t.test("turn 1 has move", data.get("move") is not None)
+    t.test("turn 1 has next", "next" in data)
     nxt = data.get("next", {})
-    test("turn 1 next has legal_moves", len(nxt.get("legal_moves", {})) > 0)
+    t.test("turn 1 next has legal_moves", len(nxt.get("legal_moves", {})) > 0)
 
     # 2. Player (black) makes a move with grade + peek
     # Pick first legal move from next.legal_moves
@@ -298,10 +279,10 @@ def test_full_dream_workflow():
         "peek_next": True,
         "peek_maxdepth": 4,
     })
-    test("player move returns 200", r.status_code == 200, f"got {r.status_code}")
+    t.test("player move returns 200", r.status_code == 200, f"got {r.status_code}")
     data = r.json()
-    test("player move has grade", "grade" in data)
-    test("player move has next", "next" in data)
+    t.test("player move has grade", "grade" in data)
+    t.test("player move has next", "next" in data)
 
     # 3. Computer (white) plays second turn with peek
     r = requests.post(f"{BASE_URL}/turn", json={
@@ -310,15 +291,15 @@ def test_full_dream_workflow():
         "peek_next": True,
         "peek_maxdepth": 4,
     })
-    test("turn 2 returns 200", r.status_code == 200)
+    t.test("turn 2 returns 200", r.status_code == 200)
     data = r.json()
-    test("turn 2 has move", data.get("move") is not None)
-    test("turn 2 game continues", data.get("game_over") is None)
+    t.test("turn 2 has move", data.get("move") is not None)
+    t.test("turn 2 game continues", data.get("game_over") is None)
 
     # Verify ply advanced correctly (1 initial + 3 moves = 4)
     r = requests.get(f"{BASE_URL}/session/stats", params={"session_id": sid})
     stats = r.json()
-    test("ply is 4 after 3 moves", stats.get("ply") == 4,
+    t.test("ply is 4 after 3 moves", stats.get("ply") == 4,
          f"got {stats.get('ply')}")
 
 
@@ -342,10 +323,10 @@ def main():
     test_full_dream_workflow()
 
     print(f"\n{'=' * 60}")
-    print(f"Results: {passed} passed, {failed} failed")
+    print(f"Results: {t.passed} passed, {t.failed} failed")
     print(f"{'=' * 60}")
 
-    if failed > 0:
+    if t.failed > 0:
         exit(1)
 
 
