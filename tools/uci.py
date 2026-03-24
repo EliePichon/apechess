@@ -28,7 +28,7 @@ def render_move(move, white_pov):
         return "(none)"
     i, j = move.i, move.j
     if not white_pov:
-        i, j = 119 - i, 119 - j
+        i, j = sunfish.flip_coord(i), sunfish.flip_coord(j)
     render = sunfish.render
     return render(i) + render(j) + move.prom.lower()
 
@@ -38,7 +38,7 @@ def parse_move(move_str, white_pov):
     i, j, prom = parse(move_str[:2]), parse(move_str[2:4]), move_str[4:].upper()
     logger.debug(f"Parsed move {move_str} to {i}, {j}, {prom}")
     if not white_pov:
-        i, j = 119 - i, 119 - j
+        i, j = sunfish.flip_coord(i), sunfish.flip_coord(j)
     return sunfish.Move(i, j, prom)
 
 def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None, top_n=10, ignore_squares=[]):
@@ -385,7 +385,7 @@ def from_fen(board, color, castling, enpas, _hclock, _fclock):
         pos = pos._replace(score=pos.calculate_score())
     else:
         score = sum(sunfish.pst[c][i] for i, c in enumerate(board) if c.isupper())
-        score -= sum(sunfish.pst[c.upper()][119-i] for i, c in enumerate(board) if c.islower())
+        score -= sum(sunfish.pst[c.upper()][sunfish.flip_coord(i)] for i, c in enumerate(board) if c.islower())
         pos = sunfish.Position(board, score, wc, bc, ep, 0)
     return pos if color == 'w' else pos.rotate()
 

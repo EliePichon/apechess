@@ -236,8 +236,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         """Rotates the board, preserving enpassant, unless nullmove"""
         return Position(
             self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
-            119 - self.ep if self.ep and not nullmove else 0,
-            119 - self.kp if self.kp and not nullmove else 0,
+            flip_coord(self.ep) if self.ep and not nullmove else 0,
+            flip_coord(self.kp) if self.kp and not nullmove else 0,
         )
 
     def move(self, move):
@@ -283,10 +283,10 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         score = pst[p][j] - pst[p][i]
         # Capture (exclude rocks which are not capturable)
         if q.islower() and q != 'o':
-            score += pst[q.upper()][119 - j]
+            score += pst[q.upper()][flip_coord(j)]
         # Castling check detection
         if abs(j - self.kp) < 2:
-            score += pst["K"][119 - j]
+            score += pst["K"][flip_coord(j)]
         # Castling
         if p in KINGS and abs(i - j) == 2:
             score += pst["R"][(i + j) // 2]
@@ -296,7 +296,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if A8 <= j <= H8:
                 score += pst[prom][j] - pst[p][j]
             if j == self.ep:
-                score += pst[p][119 - (j + S)]
+                score += pst[p][flip_coord(j + S)]
 
          # Then apply the random factor:
         if hasattr(self, 'searcher') and self.searcher.precision > 0.0:
@@ -521,6 +521,11 @@ def parse(c):
 def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
+
+
+def flip_coord(i):
+    """Mirror a board coordinate for the opponent's perspective (10x12 mailbox)."""
+    return 119 - i
 
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 

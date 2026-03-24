@@ -15,7 +15,7 @@ Fork of Sunfish chess engine, exposed as a REST API (Flask, port 5500).
 
 **Pieces**: Uppercase=White (PNBRQK), lowercase=Black. Dot=empty, space/newline=padding.
 
-**Critical**: Engine always works from white's perspective. Black positions are rotated via `Position.rotate()` which calls `swapcase()`. Coordinate flip: `119 - coord`.
+**Critical**: Engine always works from white's perspective. Black positions are rotated via `Position.rotate()` which calls `swapcase()`. Coordinate flip: `flip_coord(coord)` (defined in sunfish.py, returns `119 - coord`).
 
 ### Rocks (`O`/`o`)
 
@@ -121,7 +121,7 @@ Eval gap between the best and 2nd-best move — measures how critical the turn i
 ## Key Conventions
 
 - Coords: `parse("e2")` → board index, `render(idx)` → algebraic notation
-- Black coordinate flipping: `119 - coord`
+- Black coordinate flipping: `flip_coord(coord)` (defined in sunfish.py)
 - Check detection: `can_kill_king(pos)` checks if opponent is in check. Current player: `can_kill_king(pos.rotate())`
 - Legal moves: `Position.get_legal_moves(square=None)` filters out self-check
 - Move application: `Position.move(m)` returns new position (rotated for opponent)
@@ -147,7 +147,7 @@ Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_ro
 ## Common Pitfalls
 
 1. **Stateless vs Session**: Stateless endpoints require FEN. Session endpoints use `session_id` (from `/newgame`). Any session endpoint accepts optional `fen` for re-sync.
-2. **Coordinate flipping**: All black moves need `119 - coord`. FEN side-to-move determines this.
+2. **Coordinate flipping**: All black moves need `flip_coord(coord)`. FEN side-to-move determines this.
 3. **Rocks + swapcase**: `rotate()` flips O↔o. Both must be handled. Test both white/black to move.
 4. **`from_fen()` signature**: Takes 6 positional args (board, color, castling, enpas, hclock, fclock), NOT a FEN string.
 5. **Black history init**: `from_fen()` returns `pos.rotate()` for color='b'. History needs `[pos.rotate(), pos]`.

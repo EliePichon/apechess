@@ -213,9 +213,9 @@ def _get_legal_moves_from_pos(pos, white_pov):
                         for m in legal
                     ]
                 else:
-                    sq = sunfish.render(119 - i)
+                    sq = sunfish.render(sunfish.flip_coord(i))
                     move_strs = [
-                        sunfish.render(119 - m.i) + sunfish.render(119 - m.j) + m.prom.lower()
+                        sunfish.render(sunfish.flip_coord(m.i)) + sunfish.render(sunfish.flip_coord(m.j)) + m.prom.lower()
                         for m in legal
                     ]
                 moves[sq] = move_strs
@@ -341,7 +341,7 @@ def get_filtered_legal_moves(pos, white_pov, ignore_squares):
             try:
                 idx = sunfish.parse(square_str)
                 if not white_pov:
-                    idx = 119 - idx
+                    idx = sunfish.flip_coord(idx)
                 ignored_indices.add(idx)
             except Exception:
                 pass
@@ -477,8 +477,8 @@ def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"
         effective_side = 'b' if (num_moves % 2 == 0) else 'w'
 
     if effective_side == 'b':
-        move_from = 119 - sunfish.parse(bestmove[:2])
-        move_to = 119 - sunfish.parse(bestmove[2:4])
+        move_from = sunfish.flip_coord(sunfish.parse(bestmove[:2]))
+        move_to = sunfish.flip_coord(sunfish.parse(bestmove[2:4]))
     else:
         move_from = sunfish.parse(bestmove[:2])
         move_to = sunfish.parse(bestmove[2:4])
@@ -598,8 +598,8 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
             src = sunfish.render(m.i)
             move_str = sunfish.render(m.i) + sunfish.render(m.j) + m.prom.lower()
         else:
-            src = sunfish.render(119 - m.i)
-            move_str = sunfish.render(119 - m.i) + sunfish.render(119 - m.j) + m.prom.lower()
+            src = sunfish.render(sunfish.flip_coord(m.i))
+            move_str = sunfish.render(sunfish.flip_coord(m.i)) + sunfish.render(sunfish.flip_coord(m.j)) + m.prom.lower()
 
         if src not in moves_by_square:
             moves_by_square[src] = []
