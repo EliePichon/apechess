@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Engine errors — raised instead of returning (error_dict, status_code) tuples
+# ---------------------------------------------------------------------------
+
+class EngineError(Exception):
+    """Error from engine operations, carrying an HTTP status code."""
+    def __init__(self, message, status_code=400):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+
+# ---------------------------------------------------------------------------
 # Game Session — holds position + Searcher state across requests
 # ---------------------------------------------------------------------------
 
@@ -479,19 +491,19 @@ def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"
 def _resolve_context(session_id, fen, moves_history, search_fn):
     """Resolve session or stateless context and run a search.
 
-    Returns (result, hist) on success, or (error_dict, status_code) on failure.
+    Returns (result, hist) on success. Raises EngineError on failure.
     """
     if session_id:
         session = get_session(session_id)
         if session is None:
-            return {"error": "Invalid or expired session_id"}, 404
+            raise EngineError("Invalid or expired session_id", 404)
         if fen:
             session.override_fen(fen, moves_history)
         result = session.run_search(search_fn)
         return result, session.hist
     else:
         if not fen:
-            return {"error": "Either fen or session_id is required"}, 400
+            raise EngineError("Either fen or session_id is required", 400)
         hist = build_history(fen, moves_history)
         searcher = sunfish.Searcher()
         result = search_fn(searcher, hist)
@@ -523,10 +535,7 @@ def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
             internal_top_n, ignore_squares or []
         )
 
-    resolved = _resolve_context(session_id, fen, moves_history, do_search)
-    if isinstance(resolved[1], int):
-        return resolved
-    result, hist = resolved
+    result, hist = _resolve_context(session_id, fen, moves_history, do_search)
 
     if result["bestmove"] == "(none)":
         return {"bestmoves": [], "check": False}
@@ -570,10 +579,7 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
         searcher.precision = 0.0
         return _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
 
-    resolved = _resolve_context(session_id, fen, moves_history, do_eval)
-    if isinstance(resolved[1], int):
-        return resolved
-    result, hist = resolved
+    result, hist = _resolve_context(session_id, fen, moves_history, do_eval)
 
     # Determine side to move for coordinate rendering
     white_pov = len(hist) % 2 == 1
@@ -663,7 +669,7 @@ def apply_move(session_id, move_str, is_computer_turn=False,
     """
     session = get_session(session_id)
     if session is None:
-        return {"error": "Invalid or expired session_id"}, 404
+        raise EngineError("Invalid or expired session_id", 404)
 
     if fen:
         session.override_fen(fen, moves_history)
@@ -671,7 +677,7 @@ def apply_move(session_id, move_str, is_computer_turn=False,
     try:
         session.apply_move(move_str)
     except ValueError as e:
-        return {"error": str(e)}, 400
+        raise EngineError(str(e), 400)
 
     result = {"status": "ok"}
 
@@ -682,17 +688,16 @@ def apply_move(session_id, move_str, is_computer_turn=False,
 
     # Auto-compute on computer turn
     if is_computer_turn:
-        best = get_best_moves(
-            session_id=session_id, maxdepth=maxdepth,
-            movetime=movetime, clutchness=True
-        )
-        if isinstance(best, tuple):
-            # Error case (returns (dict, status_code))
-            result["bestmoves"] = []
-            result["clutchness"] = None
-        else:
+        try:
+            best = get_best_moves(
+                session_id=session_id, maxdepth=maxdepth,
+                movetime=movetime, clutchness=True
+            )
             result["bestmoves"] = best.get("bestmoves", [])
             result["clutchness"] = best.get("clutchness")
+        except EngineError:
+            result["bestmoves"] = []
+            result["clutchness"] = None
 
     return result
 
@@ -706,7 +711,7 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
     """
     session = get_session(session_id)
     if session is None:
-        return {"error": "Invalid or expired session_id"}, 404
+        raise EngineError("Invalid or expired session_id", 404)
 
     if fen:
         session.override_fen(fen, moves_history)
@@ -765,7 +770,7 @@ def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
     """
     session = get_session(session_id)
     if session is None:
-        return {"error": "Invalid or expired session_id"}, 404
+        raise EngineError("Invalid or expired session_id", 404)
 
     if fen:
         session.override_fen(fen, moves_history)
@@ -779,7 +784,7 @@ def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
         pos = hist[-1]
         legal = list(pos.get_legal_moves())
         if parsed not in legal:
-            raise ValueError(f"Illegal move: {move_str}")
+            raise EngineError(f"Illegal move: {move_str}", 400)
 
         response = {"status": "ok"}
 
@@ -804,7 +809,4 @@ def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
 
         return response
 
-    try:
-        return session.run_search(do_move)
-    except ValueError as e:
-        return {"error": str(e)}, 400
+    return session.run_search(do_move)

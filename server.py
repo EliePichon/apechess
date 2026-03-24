@@ -3,6 +3,7 @@ import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import engine
+from engine import EngineError
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -21,18 +22,16 @@ CORS(app,
                r"/session/stats": {"origins": "*"},
                r"/health": {"origins": "*"}})
 
+@app.errorhandler(EngineError)
+def handle_engine_error(error):
+    return jsonify({"error": error.message}), error.status_code
+
 def validate_fen(fen):
     """Return a 400 error response if FEN is invalid, or None if OK."""
     fen_parts = fen.split()
     if len(fen_parts) < 2:
         return jsonify({"error": "Invalid FEN string"}), 400
     return None
-
-def _engine_response(result):
-    """Convert engine result to Flask response, unwrapping error tuples."""
-    if isinstance(result, tuple):
-        return jsonify(result[0]), result[1]
-    return jsonify(result)
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -59,6 +58,8 @@ def get_moves_endpoint():
     try:
         result = engine.get_legal_moves(fen)
         return jsonify(result)
+    except EngineError:
+        raise
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
@@ -116,7 +117,9 @@ def bestmove_endpoint():
             session_id=session_id,
             clutchness=clutchness,
         )
-        return _engine_response(result)
+        return jsonify(result)
+    except EngineError:
+        raise
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
@@ -138,6 +141,8 @@ def is_check_endpoint():
     try:
         check = engine.is_check(fen)
         return jsonify({"check": check})
+    except EngineError:
+        raise
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
@@ -162,6 +167,8 @@ def new_game_endpoint():
     try:
         session_id = engine.create_session(fen)
         return jsonify({"session_id": session_id})
+    except EngineError:
+        raise
     except Exception as e:
         logger.error(f"Error creating session: {e}")
         return jsonify({"error": str(e)}), 500
@@ -226,7 +233,9 @@ def move_endpoint():
                 fen=fen,
                 moves_history=moves_history,
             )
-        return _engine_response(result)
+        return jsonify(result)
+    except EngineError:
+        raise
     except Exception as e:
         logger.error(f"Error processing move: {e}")
         return jsonify({"error": str(e)}), 500
@@ -275,7 +284,9 @@ def turn_endpoint():
             fen=fen,
             moves_history=moves_history,
         )
-        return _engine_response(result)
+        return jsonify(result)
+    except EngineError:
+        raise
     except Exception as e:
         logger.error(f"Error processing turn: {e}")
         return jsonify({"error": str(e)}), 500
@@ -318,7 +329,9 @@ def eval_moves_endpoint():
             movetime=movetime,
             session_id=session_id,
         )
-        return _engine_response(result)
+        return jsonify(result)
+    except EngineError:
+        raise
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
