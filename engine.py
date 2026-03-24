@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
-def _tt_lookup(searcher, pos, final_depth, min_depth=1):
+def tt_lookup(searcher, pos, final_depth, min_depth=1):
     """Look up position score from transposition table across depth range.
 
     Returns the score (negated, from opponent's perspective) or None if not found.
@@ -278,7 +278,7 @@ def _grade_move(searcher, hist, move_str, maxdepth=8):
 
     # Try TT lookup first
     final_depth = result.get("depth_reached", 1)
-    player_eval = _tt_lookup(searcher, new_pos, final_depth)
+    player_eval = tt_lookup(searcher, new_pos, final_depth)
 
     # Fallback: shallow search
     if player_eval is None:
@@ -301,7 +301,7 @@ def _grade_move(searcher, hist, move_str, maxdepth=8):
     }
 
 
-def _run_iterative_deepening(searcher, hist, max_depth, max_movetime):
+def run_iterative_deepening(searcher, hist, max_depth, max_movetime, stop_event=None):
     """Run iterative deepening search, return the final depth reached."""
     start = time.time()
     final_depth = 1
@@ -313,10 +313,12 @@ def _run_iterative_deepening(searcher, hist, max_depth, max_movetime):
             time_budget = max_movetime * 2 / 3
             if max_movetime > 0 and (time.time() - start) > time_budget:
                 break
+            if stop_event is not None and stop_event.is_set():
+                break
     return final_depth
 
 
-def _get_filtered_legal_moves(pos, white_pov, ignore_squares):
+def get_filtered_legal_moves(pos, white_pov, ignore_squares):
     """Generate legal moves, optionally filtering out moves from ignored squares."""
     move_list = list(pos.gen_moves())
     legal_moves = [m for m in move_list if not can_kill_king(pos.move(m))]
@@ -336,7 +338,7 @@ def _get_filtered_legal_moves(pos, white_pov, ignore_squares):
     return legal_moves
 
 
-def _score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
+def score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
     """Score and rank legal moves. Returns (scored_moves, clutchness_val).
 
     Fast path (top_n=1): TT lookup for best move, fallback to first legal.
@@ -362,7 +364,7 @@ def _score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
         for m in legal_moves:
             new_pos = pos.move(m)
             move_str = render_move(m, white_pov)
-            score = _tt_lookup(searcher, new_pos, final_depth)
+            score = tt_lookup(searcher, new_pos, final_depth)
             if score is None:
                 score = pos.value(m)
             quick_scored.append((m, move_str, score, new_pos))
@@ -375,7 +377,7 @@ def _score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
         # Deep evaluation for top candidates
         shallow_depth = max(3, final_depth - 3)
         for m, move_str, quick_score, new_pos in top_candidates:
-            score = _tt_lookup(searcher, new_pos, final_depth, min_depth=max(1, final_depth - 2))
+            score = tt_lookup(searcher, new_pos, final_depth, min_depth=max(1, final_depth - 2))
             if score is None and shallow_depth > 0:
                 try:
                     score = -searcher.bound(new_pos, 0, shallow_depth, can_null=True)
@@ -399,7 +401,7 @@ def _score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
     return scored_moves, clutchness_val
 
 
-def _select_best_move(my_pv, scored_moves, ignore_squares):
+def select_best_move(my_pv, scored_moves, ignore_squares):
     """Select best move from PV (preferred) or scored moves. Returns str or None."""
     if my_pv and len(my_pv) >= 2:
         potential_best = my_pv[1]
@@ -423,13 +425,13 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
     white_pov = len(hist) % 2 == 1
     pos = hist[-1]
 
-    final_depth = _run_iterative_deepening(searcher, hist, max_depth, max_movetime)
+    final_depth = run_iterative_deepening(searcher, hist, max_depth, max_movetime)
 
-    legal_moves = _get_filtered_legal_moves(pos, white_pov, ignore_squares)
+    legal_moves = get_filtered_legal_moves(pos, white_pov, ignore_squares)
     if not legal_moves:
         return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
 
-    scored_moves, clutchness_val = _score_moves(
+    scored_moves, clutchness_val = score_moves(
         searcher, pos, legal_moves, white_pov, final_depth, top_n
     )
 
@@ -440,7 +442,7 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
             score = int(my_pv[2]) - pos.score
             scored_moves = [(scored_moves[0][0], score)]
 
-    bestmove_str = _select_best_move(my_pv, scored_moves, ignore_squares)
+    bestmove_str = select_best_move(my_pv, scored_moves, ignore_squares)
     if not bestmove_str:
         return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
 
@@ -637,7 +639,7 @@ def _evaluate_all_moves(searcher, hist, max_movetime, max_depth):
 
     for m in legal_moves:
         new_pos = pos.move(m)
-        score = _tt_lookup(searcher, new_pos, final_depth)
+        score = tt_lookup(searcher, new_pos, final_depth)
 
         # Fallback: shallow search
         if score is None:
