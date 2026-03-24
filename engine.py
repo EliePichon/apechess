@@ -301,35 +301,27 @@ def _grade_move(searcher, hist, move_str, maxdepth=8):
     }
 
 
-def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_squares):
-    """Core search logic. Adapted from tools/uci.py go_loop() lines 44-263.
-
-    Returns dict instead of printing to stdout / calling callbacks.
-    """
+def _run_iterative_deepening(searcher, hist, max_depth, max_movetime):
+    """Run iterative deepening search, return the final depth reached."""
     start = time.time()
     final_depth = 1
-
-    # 1 - Main iterative deepening search
     for depth, gamma, score, move in searcher.search(hist):
         final_depth = depth
         if depth - 1 >= max_depth:
             break
-        elapsed = time.time() - start
-        if score >= gamma:
-            best_move = render_move(move, white_pov=len(hist) % 2 == 1)
         if depth > 1:
             time_budget = max_movetime * 2 / 3
-            if max_movetime > 0 and elapsed > time_budget:
+            if max_movetime > 0 and (time.time() - start) > time_budget:
                 break
+    return final_depth
 
-    # 2 - Get all legal moves
-    pos = hist[-1]
+
+def _get_filtered_legal_moves(pos, white_pov, ignore_squares):
+    """Generate legal moves, optionally filtering out moves from ignored squares."""
     move_list = list(pos.gen_moves())
     legal_moves = [m for m in move_list if not can_kill_king(pos.move(m))]
 
-    # Filter out moves from ignored squares
     if ignore_squares and len(ignore_squares) > 0:
-        white_pov = len(hist) % 2 == 1
         ignored_indices = set()
         for square_str in ignore_squares:
             try:
@@ -341,46 +333,46 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
                 pass
         legal_moves = [m for m in legal_moves if m.i not in ignored_indices]
 
-    if not legal_moves:
-        return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
+    return legal_moves
 
-    # 3 - Evaluate moves based on top_n parameter
+
+def _score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
+    """Score and rank legal moves. Returns (scored_moves, clutchness_val).
+
+    Fast path (top_n=1): TT lookup for best move, fallback to first legal.
+    Standard path (top_n>=2): quick screening → candidate selection → deep eval.
+    Clutchness is computed before trimming to top_n.
+    """
     scored_moves = []
 
-    # FAST PATH: top_n=1
     if top_n == 1:
-        best_move_obj = searcher.tp_move.get(hist[-1])
-        if best_move_obj:
-            if best_move_obj in legal_moves:
-                move_str = render_move(best_move_obj, len(hist) % 2 == 1)
-                scored_moves = [(move_str, 0)]
-            elif len(legal_moves) > 0:
-                m = legal_moves[0]
-                move_str = render_move(m, len(hist) % 2 == 1)
-                scored_moves = [(move_str, 0)]
-        elif len(legal_moves) > 0:
-            m = legal_moves[0]
-            move_str = render_move(m, len(hist) % 2 == 1)
+        # FAST PATH: single best move from TT
+        best_move_obj = searcher.tp_move.get(pos)
+        if best_move_obj and best_move_obj in legal_moves:
+            move_str = render_move(best_move_obj, white_pov)
             scored_moves = [(move_str, 0)]
-
-    # STANDARD PATH: Multi-move evaluation using TT + shallow search
+        elif legal_moves:
+            move_str = render_move(legal_moves[0], white_pov)
+            scored_moves = [(move_str, 0)]
     else:
-        # Step 3a: Quick screening with TT/static eval
+        # STANDARD PATH: multi-move evaluation using TT + shallow search
+
+        # Quick screening with TT/static eval
         quick_scored = []
         for m in legal_moves:
             new_pos = pos.move(m)
-            move_str = render_move(m, len(hist) % 2 == 1)
+            move_str = render_move(m, white_pov)
             score = _tt_lookup(searcher, new_pos, final_depth)
             if score is None:
                 score = pos.value(m)
             quick_scored.append((m, move_str, score, new_pos))
 
-        # Step 3b: Sort and select top candidates
+        # Sort and select top candidates
         quick_scored.sort(key=lambda x: x[2], reverse=True)
         buffer_size = min(5, max(2, top_n // 2))
         top_candidates = quick_scored[:min(top_n + buffer_size, len(quick_scored))]
 
-        # Step 3c: Deep evaluation for top candidates
+        # Deep evaluation for top candidates
         shallow_depth = max(3, final_depth - 3)
         for m, move_str, quick_score, new_pos in top_candidates:
             score = _tt_lookup(searcher, new_pos, final_depth, min_depth=max(1, final_depth - 2))
@@ -393,44 +385,62 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
                 score = quick_score
             scored_moves.append((move_str, score))
 
-        # Step 3d: Final sort
         scored_moves.sort(key=lambda x: x[1], reverse=True)
 
-    # 3e - Compute clutchness (eval gap between best and 2nd-best) before trimming
+    # Compute clutchness before trimming
     clutchness_val = None
     if len(scored_moves) >= 2:
         clutchness_val = scored_moves[0][1] - scored_moves[1][1]
 
-    # 3f - Trim to requested top_n
+    # Trim to requested top_n
     if len(scored_moves) > top_n:
         scored_moves = scored_moves[:top_n]
 
-    # 4 - Calculate PV for scoring
-    my_pv = pv(searcher, hist[-1], include_scores=True)
+    return scored_moves, clutchness_val
 
-    # Update score for top_n=1 fast path
-    if top_n == 1 and len(scored_moves) > 0 and scored_moves[0][1] == 0:
+
+def _select_best_move(my_pv, scored_moves, ignore_squares):
+    """Select best move from PV (preferred) or scored moves. Returns str or None."""
+    if my_pv and len(my_pv) >= 2:
+        potential_best = my_pv[1]
+        move_from = potential_best[:2]
+        is_ignored = (ignore_squares and len(ignore_squares) > 0
+                      and move_from in ignore_squares)
+        if not is_ignored:
+            return potential_best
+
+    if scored_moves:
+        return scored_moves[0][0]
+
+    return None
+
+
+def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_squares):
+    """Core search logic. Adapted from tools/uci.py go_loop() lines 44-263.
+
+    Returns dict instead of printing to stdout / calling callbacks.
+    """
+    white_pov = len(hist) % 2 == 1
+    pos = hist[-1]
+
+    final_depth = _run_iterative_deepening(searcher, hist, max_depth, max_movetime)
+
+    legal_moves = _get_filtered_legal_moves(pos, white_pov, ignore_squares)
+    if not legal_moves:
+        return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
+
+    scored_moves, clutchness_val = _score_moves(
+        searcher, pos, legal_moves, white_pov, final_depth, top_n
+    )
+
+    # PV extraction + score refinement for fast path
+    my_pv = pv(searcher, pos, include_scores=True)
+    if top_n == 1 and scored_moves and scored_moves[0][1] == 0:
         if len(my_pv) >= 3:
             score = int(my_pv[2]) - pos.score
             scored_moves = [(scored_moves[0][0], score)]
 
-    # 5 - Determine best move
-    bestmove_str = None
-
-    if my_pv and len(my_pv) >= 2:
-        potential_best = my_pv[1]
-        move_from = potential_best[:2]
-        is_ignored = False
-        if ignore_squares and len(ignore_squares) > 0:
-            is_ignored = move_from in ignore_squares
-        if not is_ignored:
-            bestmove_str = potential_best
-            if len(my_pv) >= 3:
-                bestmove_score = int(my_pv[2]) - pos.score
-
-    if bestmove_str is None and len(scored_moves) > 0:
-        bestmove_str = scored_moves[0][0]
-
+    bestmove_str = _select_best_move(my_pv, scored_moves, ignore_squares)
     if not bestmove_str:
         return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
 
