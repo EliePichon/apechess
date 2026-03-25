@@ -141,6 +141,7 @@ NON_SLIDERS = frozenset("PNKACY")
 PAWNS = frozenset("PA")
 KINGS = frozenset("KY")
 ROCKS = frozenset("Oo")
+PROMOTION_PIECES = {"A": "CDTX", "P": "NBRQ"}
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
@@ -217,7 +218,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                             break
                         # If we move to the last row, we can be anything
                         if A8 <= j <= H8:
-                            proms = "CDTX" if p == "A" else "NBRQ"
+                            proms = PROMOTION_PIECES[p]
                             for prom in proms:
                                 yield Move(i, j, prom)
                             break
