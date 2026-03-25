@@ -11,16 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Flask app
 app = Flask(__name__)
-CORS(app,
-    resources={r"/getmoves": {"origins": "*"},
-               r"/bestmove": {"origins": "*"},
-               r"/ischeck": {"origins": "*"},
-               r"/evalmoves": {"origins": "*"},
-               r"/newgame": {"origins": "*"},
-               r"/move": {"origins": "*"},
-               r"/turn": {"origins": "*"},
-               r"/session/stats": {"origins": "*"},
-               r"/health": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 @app.errorhandler(EngineError)
 def handle_engine_error(error):
