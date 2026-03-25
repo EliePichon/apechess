@@ -106,6 +106,14 @@ for powered, base in POWERED_TO_BASE.items():
 # Our board is represented as a 120 character string. The padding allows for
 # fast detection of moves that don't stay within the board.
 A1, H1, A8, H8 = 91, 98, 21, 28
+
+def _update_castling(i, j, wc, bc):
+    """Update castling rights when a piece moves from i or captures on j."""
+    if i == A1: wc = (False, wc[1])
+    if i == H1: wc = (wc[0], False)
+    if j == A8: bc = (bc[0], False)
+    if j == H8: bc = (False, bc[1])
+    return wc, bc
 initial = (
     "         \n"  #   0 -  9
     "         \n"  #  10 - 19
@@ -253,10 +261,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         board = put(board, j, board[i])
         board = put(board, i, ".")
         # Castling rights, we move the rook or capture the opponent's
-        if i == A1: wc = (False, wc[1])
-        if i == H1: wc = (wc[0], False)
-        if j == A8: bc = (bc[0], False)
-        if j == H8: bc = (False, bc[1])
+        wc, bc = _update_castling(i, j, wc, bc)
 
         # Castling
         if p in KINGS:
