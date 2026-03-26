@@ -153,6 +153,13 @@ KINGS = frozenset("KY")
 ROCKS = frozenset("Oo")
 PROMOTION_PIECES = {"A": "CDTX", "P": "NBRQ"}
 
+# Module-level precision for randomized play (set by engine.py before search)
+_precision = 0.0
+
+def _put(board, i, p):
+    """Replace character at index i in board string with p."""
+    return board[:i] + p + board[i + 1:]
+
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
 # 8 queens up, but we got the king, we still exceed MATE_VALUE.
@@ -230,18 +237,18 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                         if A8 <= j <= H8:
                             proms = PROMOTION_PIECES[p]
                             for prom in proms:
-                                yield Move(i, j, prom)
+                                yield (i, j, prom)
                             break
                     # Move it
-                    yield Move(i, j, "")
+                    yield (i, j, "")
                     # Stop crawlers from sliding, and sliding after captures (including landing on rocks)
                     if p in NON_SLIDERS or q.islower() or q in ROCKS:
                         break
                     # Castling, by sliding the rook next to the king
                     if i == A1 and self.board[j + E] in KINGS and self.wc[0]:
-                        yield Move(j + E, j + W, "")
+                        yield (j + E, j + W, "")
                     if i == H1 and self.board[j + W] in KINGS and self.wc[1]:
-                        yield Move(j + W, j + E, "")
+                        yield (j + W, j + E, "")
 
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""
@@ -254,14 +261,13 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
     def move(self, move):
         i, j, prom = move
         p, q = self.board[i], self.board[j]
-        put = lambda board, i, p: board[:i] + p + board[i + 1 :]
         # Copy variables and reset ep and kp
         board = self.board
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
         score = self.score + self.value(move)
         # Actual move
-        board = put(board, j, board[i])
-        board = put(board, i, ".")
+        board = _put(board, j, board[i])
+        board = _put(board, i, ".")
         # Castling rights, we move the rook or capture the opponent's
         wc, bc = _update_castling(i, j, wc, bc)
 
@@ -270,16 +276,16 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             wc = (False, False)
             if abs(j - i) == 2:
                 kp = (i + j) // 2
-                board = put(board, A1 if j < i else H1, ".")
-                board = put(board, kp, "R")
+                board = _put(board, A1 if j < i else H1, ".")
+                board = _put(board, kp, "R")
         # Pawn promotion, double move and en passant capture
         if p in PAWNS:
             if A8 <= j <= H8:
-                board = put(board, j, prom)
+                board = _put(board, j, prom)
             if j - i == 2 * N:
                 ep = i + N
             if j == self.ep:
-                board = put(board, j + S, ".")
+                board = _put(board, j + S, ".")
         # We rotate the returned position, so it's ready for the next player
 
         return Position(board, score, wc, bc, ep, kp).rotate()
@@ -291,10 +297,10 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         score = pst[p][j] - pst[p][i]
         # Capture (exclude rocks which are not capturable)
         if q.islower() and q != 'o':
-            score += pst[q.upper()][flip_coord(j)]
+            score += pst[q.upper()][119 - j]
         # Castling check detection
         if abs(j - self.kp) < 2:
-            score += pst["K"][flip_coord(j)]
+            score += pst["K"][119 - j]
         # Castling
         if p in KINGS and abs(i - j) == 2:
             score += pst["R"][(i + j) // 2]
@@ -304,11 +310,11 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if A8 <= j <= H8:
                 score += pst[prom][j] - pst[p][j]
             if j == self.ep:
-                score += pst[p][flip_coord(j + S)]
+                score += pst[p][119 - (j + S)]
 
          # Then apply the random factor:
-        if hasattr(self, 'searcher') and self.searcher.precision > 0.0:
-            factor = random.uniform(1 - self.searcher.precision, 1 + self.searcher.precision)
+        if _precision > 0.0:
+            factor = random.uniform(1 - _precision, 1 + _precision)
             score = int(score * factor)
         return score
 
@@ -329,7 +335,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
 
         moves = []
         for move in self.gen_moves():
-            if square is not None and move.i != square:
+            if square is not None and move[0] != square:
                 continue  # Skip moves not starting from the specified square
             # Check legality (king not in check after move)
             if not uci.can_kill_king (self.move(move)):
@@ -362,9 +368,6 @@ class Searcher:
             if gamma >  s* then s* <= r < gamma  (A better upper bound)
             if gamma <= s* then gamma <= r <= s* (A better lower bound) """
         self.nodes += 1
-        
-        setattr(pos, 'searcher', self)
-
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
         # calmness, and from this point on there is no difference in behaviour depending on

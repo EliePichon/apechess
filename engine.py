@@ -218,13 +218,13 @@ def _get_legal_moves_from_pos(pos, white_pov):
                 if white_pov:
                     sq = sunfish.render(i)
                     move_strs = [
-                        sunfish.render(m.i) + sunfish.render(m.j) + m.prom.lower()
+                        sunfish.render(m[0]) + sunfish.render(m[1]) + m[2].lower()
                         for m in legal
                     ]
                 else:
                     sq = sunfish.render(sunfish.flip_coord(i))
                     move_strs = [
-                        sunfish.render(sunfish.flip_coord(m.i)) + sunfish.render(sunfish.flip_coord(m.j)) + m.prom.lower()
+                        sunfish.render(sunfish.flip_coord(m[0])) + sunfish.render(sunfish.flip_coord(m[1])) + m[2].lower()
                         for m in legal
                     ]
                 moves[sq] = move_strs
@@ -354,7 +354,7 @@ def get_filtered_legal_moves(pos, white_pov, ignore_squares):
                 ignored_indices.add(idx)
             except Exception:
                 pass
-        legal_moves = [m for m in legal_moves if m.i not in ignored_indices]
+        legal_moves = [m for m in legal_moves if m[0] not in ignored_indices]
 
     return legal_moves
 
@@ -510,7 +510,7 @@ def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"
         move_to = sunfish.parse(bestmove[2:4])
     promo = bestmove[4:].upper() if len(bestmove) > 4 else ""
 
-    new_position = position.move(sunfish.Move(move_from, move_to, promo))
+    new_position = position.move((move_from, move_to, promo))
     return can_kill_king(new_position.rotate())
 
 
@@ -555,7 +555,7 @@ def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
         max_movetime = movetime / 1000.0
 
     def do_search(searcher, hist):
-        searcher.precision = precision
+        sunfish._precision = precision
         return _search_best_moves(
             searcher, hist, max_movetime, maxdepth,
             internal_top_n, ignore_squares or []
@@ -602,7 +602,7 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
         max_movetime = movetime / 1000.0
 
     def do_eval(searcher, hist):
-        searcher.precision = 0.0
+        sunfish._precision = 0.0
         return _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
 
     result, hist = _resolve_context(session_id, fen, moves_history, do_eval)
@@ -621,11 +621,11 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
 
     for m, score in result["move_evals"]:
         if white_pov:
-            src = sunfish.render(m.i)
-            move_str = sunfish.render(m.i) + sunfish.render(m.j) + m.prom.lower()
+            src = sunfish.render(m[0])
+            move_str = sunfish.render(m[0]) + sunfish.render(m[1]) + m[2].lower()
         else:
-            src = sunfish.render(sunfish.flip_coord(m.i))
-            move_str = sunfish.render(sunfish.flip_coord(m.i)) + sunfish.render(sunfish.flip_coord(m.j)) + m.prom.lower()
+            src = sunfish.render(sunfish.flip_coord(m[0]))
+            move_str = sunfish.render(sunfish.flip_coord(m[0])) + sunfish.render(sunfish.flip_coord(m[1])) + m[2].lower()
 
         if src not in moves_by_square:
             moves_by_square[src] = []
@@ -745,7 +745,7 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
     max_movetime = (movetime / 1000.0) if movetime else 0
 
     def do_turn(searcher, hist):
-        searcher.precision = precision
+        sunfish._precision = precision
 
         # 1. Search for best move
         result = _search_best_moves(
@@ -802,7 +802,7 @@ def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
         session.override_fen(fen, moves_history)
 
     def do_move(searcher, hist):
-        searcher.precision = 0.0
+        sunfish._precision = 0.0
 
         # Validate move legality
         white_pov = len(hist) % 2 == 1

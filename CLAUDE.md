@@ -125,10 +125,12 @@ Eval gap between the best and 2nd-best move — measures how critical the turn i
 - Check detection: `can_kill_king(pos)` checks if opponent is in check. Current player: `can_kill_king(pos.rotate())`
 - Legal moves: `Position.get_legal_moves(square=None)` filters out self-check
 - Move application: `Position.move(m)` returns new position (rotated for opponent)
+- **Moves are plain tuples** `(i, j, prom)`, not namedtuples. Access via indexing (`move[0]`, `move[1]`, `move[2]`) or unpacking (`i, j, prom = move`). Do NOT use `.i`, `.j`, `.prom` attribute access.
 - Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0
 - Pawn logic uses `p in "PA"`, king logic uses `p in "KY"` to include powered variants
 - Non-slider stop set: `"PNKACY"`
 - `engine.py` player_pieces includes `ACDTXY`
+- **Precision** is a module-level variable `sunfish._precision` (set by engine.py before search, default 0.0). Do not set it on the Searcher instance.
 
 ## Testing
 
@@ -143,6 +145,15 @@ make logs                   # View server logs
 
 Tests are integration tests in `tests/` hitting HTTP endpoints inside Docker.
 Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_performance.py`.
+
+### Benchmarking
+
+```bash
+python scripts/benchmark.py           # Direct engine benchmark (no HTTP), depth 8
+python scripts/benchmark.py --depth 5 # Quick sanity check
+```
+
+Reports NPS (nodes/sec) and per-position timing. Node counts must stay identical across code changes (behavior-preserving). Profiling: `make profile` generates flame graph in `profiles/flame.svg`.
 
 ## Common Pitfalls
 

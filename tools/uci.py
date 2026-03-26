@@ -26,11 +26,11 @@ logger.addHandler(console_handler)
 def render_move(move, white_pov):
     if move is None:
         return "(none)"
-    i, j = move.i, move.j
+    i, j = move[0], move[1]
     if not white_pov:
         i, j = sunfish.flip_coord(i), sunfish.flip_coord(j)
     render = sunfish.render
-    return render(i) + render(j) + move.prom.lower()
+    return render(i) + render(j) + move[2].lower()
 
 
 def parse_move(move_str, white_pov):
@@ -39,7 +39,7 @@ def parse_move(move_str, white_pov):
     logger.debug(f"Parsed move {move_str} to {i}, {j}, {prom}")
     if not white_pov:
         i, j = sunfish.flip_coord(i), sunfish.flip_coord(j)
-    return sunfish.Move(i, j, prom)
+    return (i, j, prom)
 
 def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None, top_n=10, ignore_squares=[]):
     # Lazy import to break circular dependency (engine.py imports from tools/uci.py)
@@ -400,7 +400,7 @@ def can_kill_king(pos):
     # captures in case of illegal castling.
     #MATE_LOWER = 60_000 - 10 * 929
     #return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-    return any(pos.board[m.j] == 'k' or abs(m.j - pos.kp) < 2 for m in pos.gen_moves())
+    return any(pos.board[m[1]] == 'k' or abs(m[1] - pos.kp) < 2 for m in pos.gen_moves())
 
 
 def pv(searcher, pos, include_scores=True, include_loop=False):
