@@ -1,6 +1,7 @@
 # engine.py - Clean Python API for the Sunfish chess engine
 # Replaces the UCI stdin/stdout wrapper with direct function calls.
 
+import os
 import time
 import uuid
 import logging
@@ -100,11 +101,19 @@ class GameSession:
         return self._hist[-1]
 
     def stats(self):
-        return {
+        result = {
             "tp_move_size": len(self._searcher.tp_move),
             "tp_score_size": len(self._searcher.tp_score),
             "ply": len(self._hist),
         }
+        if os.environ.get("SUNFISH_PERF") == "1":
+            s = self._searcher
+            result["gen_moves_calls"] = s.gen_moves_calls
+            result["gen_moves_time_ms"] = round(s.gen_moves_time * 1000, 1)
+            result["nodes"] = s.nodes
+            if hasattr(s, "last_perf"):
+                result["last_search"] = s.last_perf
+        return result
 
 
 # Session store
@@ -437,15 +446,22 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
     white_pov = len(hist) % 2 == 1
     pos = hist[-1]
 
+    t0 = time.perf_counter()
     final_depth = run_iterative_deepening(searcher, hist, max_depth, max_movetime)
+    t_search = time.perf_counter() - t0
 
+    t0 = time.perf_counter()
     legal_moves = get_filtered_legal_moves(pos, white_pov, ignore_squares)
+    t_legal = time.perf_counter() - t0
+
     if not legal_moves:
         return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
 
+    t0 = time.perf_counter()
     scored_moves, clutchness_val = score_moves(
         searcher, pos, legal_moves, white_pov, final_depth, top_n
     )
+    t_score = time.perf_counter() - t0
 
     # PV extraction + score refinement for fast path
     my_pv = pv(searcher, pos, include_scores=True)
@@ -458,11 +474,21 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
     if not bestmove_str:
         return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
 
+    perf = {
+        "search_ms": round(t_search * 1000, 1),
+        "legal_moves_ms": round(t_legal * 1000, 1),
+        "score_moves_ms": round(t_score * 1000, 1),
+        "nodes": searcher.nodes,
+        "depth": final_depth,
+    }
+    searcher.last_perf = perf
+
     return {
         "bestmove": bestmove_str,
         "scored_moves": scored_moves,
         "depth_reached": final_depth,
         "clutchness": clutchness_val,
+        "perf": perf,
     }
 
 

@@ -5,11 +5,14 @@ services:
       context: .
       dockerfile: ./Dockerfile.local
     # Mount local files into the container
+    cap_add:
+      - SYS_PTRACE
     volumes:
       - ./server.py:/usr/src/app/server.py
       - ./engine.py:/usr/src/app/engine.py
       - ./sunfish.py:/usr/src/app/sunfish.py
       - ./tools:/usr/src/app/tools
+      - ./profiles:/usr/src/app/profiles
     ports:
       - "5500:5500"
     # Command to start your Flask app (assuming server.py is the entry script)
@@ -17,4 +20,5 @@ services:
     environment:
       - debug=True
       - PYTHONUNBUFFERED=1  # Disable buffering for real-time logs
+      - SUNFISH_PERF=0
 

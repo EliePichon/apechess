@@ -166,3 +166,13 @@ python server.py            # Direct (after pip install -r requirements.txt)
 **When to rebuild**: Only run `make down && make up` after changing `requirements.txt` or `Dockerfile.local`. Never need `docker-compose build --no-cache` for code changes.
 
 **Host binding**: Flask defaults to `0.0.0.0` (accepts Docker port-mapped traffic). Override with `FLASK_HOST=127.0.0.1` for production.
+
+## Profiling
+
+```bash
+make profile                # Run workload + generate profiles/flame.svg (open in browser)
+make profile-top            # Live py-spy top view of the running server
+make profile-record DURATION=30  # Raw py-spy recording for N seconds
+```
+
+Set `SUNFISH_PERF=1` in `docker-compose.yml` to enable fine-grained counters in `Searcher` (gen_moves timing). Then `GET /session/stats` includes `gen_moves_calls`, `gen_moves_time_ms`, `nodes`, and `last_search` timing breakdown.

@@ -4,7 +4,9 @@ from __future__ import print_function
 from itertools import count
 from collections import namedtuple
 import logging
+import os
 import random
+from time import perf_counter
 import tools.uci as uci
 
 
@@ -350,6 +352,9 @@ class Searcher:
         self.tp_move = {}
         self.history = set()
         self.nodes = 0
+        self._perf = os.environ.get("SUNFISH_PERF") == "1"
+        self.gen_moves_calls = 0
+        self.gen_moves_time = 0.0
 
     def bound(self, pos, gamma, depth, can_null=True):
         """ Let s* be the "true" score of the sub-tree we are searching.
@@ -428,7 +433,14 @@ class Searcher:
                 yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
 
             # Then all the other moves
-            for val, move in sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True):
+            if self._perf:
+                _t0 = perf_counter()
+                _scored = sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)
+                self.gen_moves_time += perf_counter() - _t0
+                self.gen_moves_calls += 1
+            else:
+                _scored = sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)
+            for val, move in _scored:
                 # Quiescent search
                 if val < val_lower:
                     break
@@ -491,6 +503,8 @@ class Searcher:
     def search(self, history):
         """Iterative deepening MTD-bi search"""
         self.nodes = 0
+        self.gen_moves_calls = 0
+        self.gen_moves_time = 0.0
         self.history = set(history)
         self.tp_score.clear()
 

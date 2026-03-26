@@ -1,4 +1,4 @@
-.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-clutchness test-perf test-session-perf test-depth test-movetime help up down logs
+.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-clutchness test-perf test-session-perf test-depth test-movetime help up down logs profile profile-top profile-record
 
 # Default target
 help:
@@ -18,6 +18,11 @@ help:
 	@echo "  make test-session-perf - Session vs stateless TP reuse benchmark"
 	@echo "  make test-depth    - Run depth performance analysis (15-20 min)"
 	@echo "  make test-movetime - Run movetime performance analysis (5-10 min)"
+	@echo ""
+	@echo "Profiling:"
+	@echo "  make profile       - Generate flame graph (profiles/flame.svg)"
+	@echo "  make profile-top   - Live py-spy top view of the server"
+	@echo "  make profile-record DURATION=30 - Raw py-spy recording for N seconds"
 	@echo ""
 
 # Start dev server
@@ -99,3 +104,33 @@ test-movetime:
 	@echo "This will take 5-10 minutes..."
 	@echo ""
 	python3 tests/test_movetime_performance.py
+
+# ---------------------------------------------------------------------------
+# Profiling
+# ---------------------------------------------------------------------------
+
+DURATION ?= 30
+
+# Generate a flame graph: start py-spy recording, run workload, produce SVG
+profile:
+	@mkdir -p profiles
+	@echo "Starting py-spy record in background..."
+	docker-compose exec -d sunfish py-spy record -o /usr/src/app/profiles/flame.svg --pid 1 --subprocesses --nonblocking
+	@sleep 1
+	@echo "Running profiling workload..."
+	python3 scripts/profile_game.py
+	@echo "Stopping py-spy..."
+	docker-compose exec sunfish pkill -INT py-spy || true
+	@sleep 2
+	@echo "Flame graph written to profiles/flame.svg"
+
+# Live top view of the running server
+profile-top:
+	docker-compose exec sunfish py-spy top --pid 1 --subprocesses --nonblocking
+
+# Raw recording for DURATION seconds
+profile-record:
+	@mkdir -p profiles
+	@echo "Recording for $(DURATION) seconds..."
+	docker-compose exec sunfish py-spy record -o /usr/src/app/profiles/flame.svg --pid 1 --subprocesses --nonblocking --duration $(DURATION)
+	@echo "Flame graph written to profiles/flame.svg"
