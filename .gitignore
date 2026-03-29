@@ -18,6 +18,9 @@ out.pgn
 
 # C extensions
 *.so
+*.dylib
+*.pyd
+*.dll
 
 # Packages
 *.egg
@@ -64,6 +67,7 @@ profiles/
 # Venv artifacts
 pyvenv.cfg
 include/
+.venv/
 
 # PyInstaller
 build/

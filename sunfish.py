@@ -984,6 +984,26 @@ def flip_coord(i):
     return 119 - i
 
 
+###############################################################################
+# C extension acceleration
+###############################################################################
+
+_USING_C_EXTENSION = False
+if os.environ.get("SUNFISH_NO_C") != "1":
+    try:
+        import _sunfish_core
+
+        _py_gen_moves = Position.gen_moves
+
+        def _c_gen_moves(self):
+            return _sunfish_core.gen_moves(self.board, self.wc, self.bc, self.ep, self.kp)
+
+        Position.gen_moves = _c_gen_moves
+        _USING_C_EXTENSION = True
+    except ImportError:
+        pass
+
+
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
 # input = raw_input

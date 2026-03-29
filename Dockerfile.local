@@ -6,4 +6,9 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install py-spy
 
+# Build C extension for gen_moves acceleration
+COPY setup.py ./
+COPY csrc/ csrc/
+RUN pip install -e .
+
 CMD [ "python", "/usr/src/app/server.py" ]

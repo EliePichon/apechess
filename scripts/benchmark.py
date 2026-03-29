@@ -56,6 +56,7 @@ def main():
     parser.add_argument("--depth", type=int, default=DEFAULT_DEPTH)
     args = parser.parse_args()
 
+    print(f"C extension: {'active' if sunfish._USING_C_EXTENSION else 'Python fallback'}")
     print(f"Benchmark: {len(POSITIONS)} positions, depth={args.depth}")
     print(f"{'Position':<20} {'Time':>8} {'Nodes':>10} {'NPS':>10} {'Move':>8}")
     print("-" * 60)
