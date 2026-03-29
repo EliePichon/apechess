@@ -1,0 +1,14 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+  - repo: local
+    hooks:
+      - id: unit-tests
+        name: unit tests
+        entry: python tests/test_search_best_moves.py
+        language: system
+        pass_filenames: false
+        always_run: true

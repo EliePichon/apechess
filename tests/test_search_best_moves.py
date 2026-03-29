@@ -187,7 +187,7 @@ def test_return_contract():
     searcher, hist = make_searcher_and_hist(START_FEN)
     result = _search_best_moves(searcher, hist, 0, 4, 2, [])
 
-    expected_keys = {"bestmove", "scored_moves", "depth_reached", "clutchness"}
+    expected_keys = {"bestmove", "scored_moves", "depth_reached", "clutchness", "perf"}
     check("exact keys match", set(result.keys()) == expected_keys,
           f"got {set(result.keys())}")
 

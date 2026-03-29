@@ -1,4 +1,4 @@
-.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-clutchness test-perf test-session-perf test-depth test-movetime help up down logs profile profile-top profile-record
+.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-clutchness test-perf test-session-perf test-depth test-movetime help up down logs profile profile-top profile-record lint format format-check setup-hooks
 
 # Default target
 help:
@@ -18,6 +18,12 @@ help:
 	@echo "  make test-session-perf - Session vs stateless TP reuse benchmark"
 	@echo "  make test-depth    - Run depth performance analysis (15-20 min)"
 	@echo "  make test-movetime - Run movetime performance analysis (5-10 min)"
+	@echo ""
+	@echo "Code quality:"
+	@echo "  make setup-hooks   - Install pre-commit hooks + dev dependencies"
+	@echo "  make lint          - Run ruff linter"
+	@echo "  make format        - Auto-format code with ruff"
+	@echo "  make format-check  - Check formatting without modifying"
 	@echo ""
 	@echo "Profiling:"
 	@echo "  make profile       - Generate flame graph (profiles/flame.svg)"
@@ -134,3 +140,25 @@ profile-record:
 	@echo "Recording for $(DURATION) seconds..."
 	docker-compose exec sunfish py-spy record -o /usr/src/app/profiles/flame.svg --pid 1 --subprocesses --nonblocking --duration $(DURATION)
 	@echo "Flame graph written to profiles/flame.svg"
+
+# ---------------------------------------------------------------------------
+# Code quality
+# ---------------------------------------------------------------------------
+
+# Install pre-commit hooks and dev dependencies
+setup-hooks:
+	pip install -r requirements-dev.txt
+	pre-commit install
+	@echo "Pre-commit hooks installed!"
+
+# Run linter
+lint:
+	ruff check .
+
+# Auto-format code
+format:
+	ruff format .
+
+# Check formatting without modifying
+format-check:
+	ruff format --check .
