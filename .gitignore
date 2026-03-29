@@ -61,6 +61,10 @@ profiles/
 # Vim
 *.swp
 
+# Venv artifacts
+pyvenv.cfg
+include/
+
 # PyInstaller
 build/
 *.spec
