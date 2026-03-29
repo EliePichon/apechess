@@ -194,11 +194,22 @@ def is_check(fen):
     return can_kill_king(position)
 
 
-def _detect_game_over(pos):
-    """Check if a position is checkmate, stalemate, or ongoing.
+def _detect_king_captured(pos):
+    """Check if the side-to-move's king was captured (missing from board).
 
-    Returns "checkmate", "stalemate", or None (game continues).
+    After Position.move() + rotate(), uppercase pieces belong to the side-to-move.
+    If neither K nor Y (powered king) exists, that side's king was captured.
     """
+    return "K" not in pos.board and "Y" not in pos.board
+
+
+def _detect_game_over(pos):
+    """Check if a position is king_captured, checkmate, stalemate, or ongoing.
+
+    Returns "king_captured", "checkmate", "stalemate", or None (game continues).
+    """
+    if _detect_king_captured(pos):
+        return "king_captured"
     legal = list(pos.get_legal_moves())
     if legal:
         return None
@@ -704,9 +715,11 @@ def apply_move(session_id, move_str, is_computer_turn=False, maxdepth=15, moveti
 
     result = {"status": "ok"}
 
-    # Check detection after the move
+    # Check and game_over detection after the move
     pos = session.position
-    result["check"] = can_kill_king(pos.rotate())
+    game_over = _detect_game_over(pos)
+    result["check"] = can_kill_king(pos.rotate()) if game_over != "king_captured" else False
+    result["game_over"] = game_over
     result["ply"] = len(session.hist)
 
     # Auto-compute on computer turn
@@ -765,8 +778,8 @@ def computer_turn(
 
         # 3. Detect check and game_over after our move
         pos_after = session.position
-        check = can_kill_king(pos_after.rotate())
         game_over = _detect_game_over(pos_after)
+        check = can_kill_king(pos_after.rotate()) if game_over != "king_captured" else False
 
         response = {
             "move": best_move_str,
@@ -822,8 +835,8 @@ def player_move(
 
         # 3. Check and game_over detection
         pos_after = session.position
-        check = can_kill_king(pos_after.rotate())
         game_over = _detect_game_over(pos_after)
+        check = can_kill_king(pos_after.rotate()) if game_over != "king_captured" else False
         response["check"] = check
         response["game_over"] = game_over
         response["ply"] = len(session.hist)

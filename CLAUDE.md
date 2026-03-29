@@ -93,7 +93,7 @@ Any session endpoint accepts optional `fen` to override/re-sync position.
 - `POST /turn` — Computer plays a turn. Searches for best move, applies it to session, detects game state.
   - Params: `session_id`, `maxdepth` (default 15), `movetime`, `precision` (0=strongest), `top_n` (default 1), `ignore_squares`, `peek_next` (bool), `peek_maxdepth` (default 5)
   - Returns `{move, eval, check, game_over, next?: {legal_moves, check, clutchness, best_eval, best_move}}`
-  - `game_over`: `null`, `"checkmate"`, or `"stalemate"`
+  - `game_over`: `null`, `"checkmate"`, `"stalemate"`, or `"king_captured"`
   - `next` block only present when `peek_next: true` and `game_over` is null
   - `next.best_move`: best move for the next side (enables instant puzzle grading)
 
@@ -125,6 +125,7 @@ Eval gap between the best and 2nd-best move — measures how critical the turn i
 - Black coordinate flipping: `flip_coord(coord)` (defined in sunfish.py)
 - Check detection: `can_kill_king(pos)` checks if opponent is in check. Current player: `can_kill_king(pos.rotate())`
 - Legal moves: `Position.get_legal_moves(square=None)` filters out self-check
+- Game over: `_detect_game_over(pos)` returns `"king_captured"`, `"checkmate"`, `"stalemate"`, or `None`. King capture is checked first (missing `K`/`Y` in board). Occurs in modified-rule scenarios (e.g., double turns) where a king ends up capturable.
 - Move application: `Position.move(m)` returns new position (rotated for opponent)
 - **Moves are plain tuples** `(i, j, prom)`, not namedtuples. Access via indexing (`move[0]`, `move[1]`, `move[2]`) or unpacking (`i, j, prom = move`). Do NOT use `.i`, `.j`, `.prom` attribute access.
 - Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0
@@ -145,7 +146,7 @@ make logs                   # View server logs
 ```
 
 Tests are integration tests in `tests/` hitting HTTP endpoints inside Docker.
-Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_performance.py`.
+Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_king_capture.py`, `test_performance.py`.
 
 C extension tests run locally (no Docker needed):
 ```bash
