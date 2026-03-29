@@ -1,104 +1,56 @@
-![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/docs/logo/sunfish_large.png)
+# Sunfish API
 
-## Introduction
-Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 131 lines of code! (`build/clean.sh sunfish.py | wc -l`).
-Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).
+A chess engine REST API, forked from [sunfish](https://github.com/thomasahle/sunfish) by Thomas Ahle.
 
-Because Sunfish is small and strives to be simple, the code provides a great platform for experimenting. People have used it for testing parallel search algorithms, experimenting with evaluation functions, and developing deep learning chess programs. Fork it today and see what you can do!
+Sunfish is a simple but strong chess engine written in Python. This fork wraps it in a Flask REST API with session management, custom piece types, and a Docker dev environment.
 
-# REST API Server
+## Features
 
-This fork includes a REST API server for easy integration with web applications.
+- **REST API** — Session-based and stateless modes, CORS-enabled
+- **Dream API** — Simplified game loop: `/newgame` → `/turn` → `/move` with move grading and look-ahead
+- **Rocks** — Immovable obstacle pieces that block movement (knights can jump over them)
+- **Powered Pieces** — Variants (A, C, D, T, X, Y) that can land on and destroy rocks
+- **Clutchness** — Measures how critical a move is (eval gap between best and second-best move)
+- **Move Grading** — Per-move accuracy scoring against the engine's best line
+- **MTD-bi Search** — With Piece Square Tables, transposition tables, and null-move pruning
 
 ## Quick Start
 
 ```bash
-# Start the development server
-make up
-
-# Run tests
-make test
-
-# View logs
-make logs
-
-# Stop server
-make down
+make up      # Start dev server in Docker (http://localhost:5500)
+make test    # Run all tests
+make down    # Stop server
 ```
 
-Available commands:
-- `make up` - Start dev server in Docker (http://localhost:5500)
-- `make test` - Run all tests
-- `make test-top-n` - Test top_n feature
-- `make test-ignore` - Test ignore_squares feature
-- `make logs` - View server logs
-- `make down` - Stop server
-- `make help` - Show all commands
+## API
 
-## API Endpoints
+See [API.md](API.md) for full endpoint documentation.
 
-### GET /getmoves
-Get all legal moves for a position.
+## Architecture
 
-**Request**: `{"fen": "<fen_string>"}`
+| File | Role |
+|------|------|
+| `sunfish.py` | Core engine — board representation, search, evaluation |
+| `engine.py` | Python API wrapping sunfish, session management |
+| `server.py` | Flask REST API |
+| `tools/uci.py` | UCI protocol layer (CLI use) |
 
-**Response**: `{"moves": {"e2": ["e2e4", "e2e3"], ...}, "check": false}`
+## Development
 
-### POST /bestmove
-Get best move(s) for a position.
-
-**Request**:
-```json
-{
-  "fen": "<fen_string>",
-  "maxdepth": 6,
-  "top_n": 5,
-  "ignore_squares": ["e2", "g1"]
-}
+```bash
+make lint          # Run ruff linter
+make format        # Auto-format with ruff
+make setup-hooks   # Install pre-commit hooks
+make profile       # Generate flame graph (profiles/flame.svg)
+make help          # Show all available commands
 ```
 
-**Response**: `{"bestmoves": [["e2e4", 45], ["d2d4", 42]], "check": false}`
+Hot-reload is enabled — code changes are picked up automatically without restarting the server.
 
-### POST /ischeck
-Check if current player is in check.
+## Attribution
 
-**Request**: `{"fen": "<fen_string>"}`
+Forked from [sunfish](https://github.com/thomasahle/sunfish) by Thomas Ahle. Sunfish heritage traces back to [Micro-Max](http://home.hccnet.nl/h.g.muller/max-src2.html) by Geert Muller and [PyChess](http://pychess.org).
 
-**Response**: `{"check": true}`
-
-See `API.md` for detailed API documentation.
-
-# Features
-
-1. Built around the simple, but efficient MTD-bi search algorithm, also known as [C*](https://www.chessprogramming.org/NegaC*).
-2. Filled with classic "chess engine tricks" for simpler and faster code.
-3. Efficiently updatedable evaluation function through [Piece Square Tables](https://www.chessprogramming.org/Piece-Square_Tables).
-4. Uses standard Python collections and data structures for clarity and efficiency.
-5. REST API for easy integration with web applications.
-
-# Limitations
-
-Sunfish supports all chess rules, except the 50 moves draw rule.
-
-There are many ways in which you may try to make Sunfish stronger. First you could change from a board representation to a mutable array and add a fast way to enumerate pieces. Then you could implement dedicated capture generation, check detection and check evasions. You could also move everything to bitboards, implement parts of the code in C or experiment with parallel search!
-
-The other way to make Sunfish stronger is to give it more knowledge of chess. The current evaluation function only uses piece square tables - it doesn't even distinguish between midgame and endgame. You can also experiment with more pruning - currently only null move is done - and extensions - currently none are used. Finally Sunfish might benefit from a more advanced move ordering, MVV/LVA and SEE perhaps?
-
-An easy way to get a strong Sunfish is to run with with the [PyPy Just-In-Time intepreter](https://pypy.org/). In particular the python2.7 version of pypy gives a 250 ELO boost compared to the cpython (2 or 3) intepreters at fast time controls:
-
-    Rank Name                    Elo     +/-   Games   Score   Draws
-       1 pypy2.7 (7.1)           166      38     300   72.2%   19.7%
-       2 pypy3.6 (7.1)            47      35     300   56.7%   21.3%
-       3 python3.7               -97      36     300   36.3%   20.7%
-       4 python2.7              -109      35     300   34.8%   24.3%
-
-
-# Why Sunfish?
-
-The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka.
-
-In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](http://pychess.org).
-
-# License
+## License
 
 [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.en.html)
