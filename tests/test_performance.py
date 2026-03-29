@@ -14,6 +14,7 @@ from helpers import BASE_URL
 # Test position (middlegame position with tactical complexity)
 TEST_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
 
+
 class PerformanceTest:
     """Runner for performance benchmarks."""
 
@@ -66,74 +67,45 @@ class PerformanceTest:
 
     def run_all(self):
         """Run all benchmark configurations."""
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print("SUNFISH PERFORMANCE BENCHMARK")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"Test FEN: {self.fen}")
         print(f"Iterations per test: {self.iterations}")
         print(f"Server: {BASE_URL}")
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
 
         # Define test configurations
         configs = [
             # Baseline: Fast path (top_n=1, no precision)
-            {
-                "name": "Baseline (top_n=1, no precision)",
-                "config": {"maxdepth": 6, "top_n": 1}
-            },
-
+            {"name": "Baseline (top_n=1, no precision)", "config": {"maxdepth": 6, "top_n": 1}},
             # With precision blur
-            {
-                "name": "With precision blur (0.15)",
-                "config": {"maxdepth": 6, "top_n": 1, "precision": 0.15}
-            },
-
+            {"name": "With precision blur (0.15)", "config": {"maxdepth": 6, "top_n": 1, "precision": 0.15}},
             # Multiple moves (top_n=15)
-            {
-                "name": "Multi-move (top_n=15, no precision)",
-                "config": {"maxdepth": 6, "top_n": 15}
-            },
-
+            {"name": "Multi-move (top_n=15, no precision)", "config": {"maxdepth": 6, "top_n": 15}},
             # Multiple moves with precision
-            {
-                "name": "Multi-move (top_n=15, precision=0.15)",
-                "config": {"maxdepth": 6, "top_n": 15, "precision": 0.15}
-            },
-
+            {"name": "Multi-move (top_n=15, precision=0.15)", "config": {"maxdepth": 6, "top_n": 15, "precision": 0.15}},
             # Smaller multi-move set
-            {
-                "name": "Multi-move (top_n=5, no precision)",
-                "config": {"maxdepth": 6, "top_n": 5}
-            },
-
+            {"name": "Multi-move (top_n=5, no precision)", "config": {"maxdepth": 6, "top_n": 5}},
             # With ignore_squares
-            {
-                "name": "With ignore_squares (2 pieces)",
-                "config": {"maxdepth": 6, "top_n": 1, "ignore_squares": ["f3", "c4"]}
-            },
+            {"name": "With ignore_squares (2 pieces)", "config": {"maxdepth": 6, "top_n": 1, "ignore_squares": ["f3", "c4"]}},
         ]
 
         # Run benchmarks
         for test in configs:
             mean, stdev, min_time = self.benchmark(test["name"], test["config"])
-            self.results.append({
-                "name": test["name"],
-                "config": test["config"],
-                "mean": mean,
-                "stdev": stdev,
-                "min": min_time
-            })
+            self.results.append({"name": test["name"], "config": test["config"], "mean": mean, "stdev": stdev, "min": min_time})
 
         # Print results table
         self.print_results()
 
     def print_results(self):
         """Print formatted results table."""
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print("RESULTS")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"{'Configuration':<45} {'Mean':<12} {'StdDev':<12} {'Min':<10}")
-        print(f"{'-'*70}")
+        print(f"{'-' * 70}")
 
         baseline = None
         for i, result in enumerate(self.results):
@@ -153,11 +125,11 @@ class PerformanceTest:
 
         # Print overhead analysis
         if baseline is not None:
-            print(f"\n{'='*70}")
+            print(f"\n{'=' * 70}")
             print("OVERHEAD ANALYSIS (vs Baseline)")
-            print(f"{'='*70}")
+            print(f"{'=' * 70}")
             print(f"{'Configuration':<45} {'Overhead':<15} {'Factor':<10}")
-            print(f"{'-'*70}")
+            print(f"{'-' * 70}")
 
             for result in self.results[1:]:  # Skip baseline
                 if result["mean"] is None:
@@ -172,7 +144,7 @@ class PerformanceTest:
 
                 print(f"{result['name']:<45} {overhead_str:<15} {factor_str:<10}")
 
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
 
 
 def main():

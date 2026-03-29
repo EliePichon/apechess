@@ -23,12 +23,12 @@ uci.sunfish = sunfish
 DEFAULT_DEPTH = 8
 
 POSITIONS = [
-    ("opening_start",   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"),
+    ("opening_start", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"),
     ("opening_italian", "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"),
-    ("midgame_open",    "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7"),
-    ("midgame_tense",   "r2qkb1r/pp2pppp/2n2n2/3p1b2/3P4/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 4 6"),
-    ("endgame_rook",    "8/5pk1/6p1/8/3R4/6PP/5PK1/2r5 w - - 0 36"),
-    ("endgame_queen",   "6k1/5ppp/8/8/8/8/5PPP/3Q2K1 w - - 0 40"),
+    ("midgame_open", "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7"),
+    ("midgame_tense", "r2qkb1r/pp2pppp/2n2n2/3p1b2/3P4/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 4 6"),
+    ("endgame_rook", "8/5pk1/6p1/8/3R4/6PP/5PK1/2r5 w - - 0 36"),
+    ("endgame_queen", "6k1/5ppp/8/8/8/8/5PPP/3Q2K1 w - - 0 40"),
 ]
 
 

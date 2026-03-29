@@ -63,7 +63,7 @@ def run_part1():
         "      Delta expected — this test documents the spread, not asserts equality.\n"
     )
     print(f"  {'Position':<35} {'peek_next':>12} {'evalmoves':>12} {'delta':>8}  flag")
-    print(f"  {'-'*35} {'-'*12} {'-'*12} {'-'*8}  ----")
+    print(f"  {'-' * 35} {'-' * 12} {'-' * 12} {'-' * 8}  ----")
 
     for pos in PART1_POSITIONS:
         label = pos["label"]
@@ -73,40 +73,47 @@ def run_part1():
         sid = create_session(fen)
 
         # 2. /turn with peek_next
-        r = requests.post(f"{BASE_URL}/turn", json={
-            "session_id": sid,
-            "maxdepth": 6,
-            "peek_next": True,
-            "peek_maxdepth": 5,
-        })
+        r = requests.post(
+            f"{BASE_URL}/turn",
+            json={
+                "session_id": sid,
+                "maxdepth": 6,
+                "peek_next": True,
+                "peek_maxdepth": 5,
+            },
+        )
         t.test(f"[{label}] /turn returns 200", r.status_code == 200, f"got {r.status_code}")
         turn_data = r.json()
 
-        t.test(f"[{label}] /turn has next block", "next" in turn_data,
-             f"keys: {list(turn_data.keys())}")
+        t.test(f"[{label}] /turn has next block", "next" in turn_data, f"keys: {list(turn_data.keys())}")
         nxt = turn_data.get("next", {})
-        t.test(f"[{label}] next has clutchness field", "clutchness" in nxt,
-             f"next keys: {list(nxt.keys())}")
+        t.test(f"[{label}] next has clutchness field", "clutchness" in nxt, f"next keys: {list(nxt.keys())}")
 
         peek_clutchness = nxt.get("clutchness")
-        t.test(f"[{label}] peek clutchness is numeric or null",
-             peek_clutchness is None or isinstance(peek_clutchness, (int, float)),
-             f"got {peek_clutchness!r}")
+        t.test(
+            f"[{label}] peek clutchness is numeric or null",
+            peek_clutchness is None or isinstance(peek_clutchness, (int, float)),
+            f"got {peek_clutchness!r}",
+        )
 
         # 3. /evalmoves on the same session (after /turn advanced the position)
-        r2 = requests.post(f"{BASE_URL}/evalmoves", json={
-            "session_id": sid,
-            "maxdepth": 5,
-        })
+        r2 = requests.post(
+            f"{BASE_URL}/evalmoves",
+            json={
+                "session_id": sid,
+                "maxdepth": 5,
+            },
+        )
         t.test(f"[{label}] /evalmoves returns 200", r2.status_code == 200, f"got {r2.status_code}")
         eval_data = r2.json()
 
-        t.test(f"[{label}] /evalmoves has clutchness field", "clutchness" in eval_data,
-             f"keys: {list(eval_data.keys())}")
+        t.test(f"[{label}] /evalmoves has clutchness field", "clutchness" in eval_data, f"keys: {list(eval_data.keys())}")
         eval_clutchness = eval_data.get("clutchness")
-        t.test(f"[{label}] evalmoves clutchness is numeric or null",
-             eval_clutchness is None or isinstance(eval_clutchness, (int, float)),
-             f"got {eval_clutchness!r}")
+        t.test(
+            f"[{label}] evalmoves clutchness is numeric or null",
+            eval_clutchness is None or isinstance(eval_clutchness, (int, float)),
+            f"got {eval_clutchness!r}",
+        )
 
         # Print side-by-side
         peek_str = f"{peek_clutchness}" if peek_clutchness is not None else "null"
@@ -119,7 +126,7 @@ def run_part1():
                 delta = abs(peek_clutchness - eval_clutchness)
                 delta_pct = delta / larger
                 flag = "WARN >20%" if delta_pct > 0.20 else "ok"
-                delta_str = f"{delta_pct*100:.0f}%"
+                delta_str = f"{delta_pct * 100:.0f}%"
             else:
                 delta_str = "0%"
                 flag = "ok"
@@ -210,17 +217,11 @@ def run_part2():
     print("\n" + "=" * 70)
     print("Part 2: Clutchness calibration table (maxdepth=5)")
     print("=" * 70)
-    print(
-        "All values from /evalmoves — no assertions on specific ranges.\n"
-        "Use this output to calibrate frontend thresholds.\n"
-    )
+    print("All values from /evalmoves — no assertions on specific ranges.\nUse this output to calibrate frontend thresholds.\n")
 
-    header = (
-        f"  {'#':>2}  {'Label':<35} {'Expected':<12} "
-        f"{'Clutchness':>12} {'Best eval':>10} {'2nd best':>10}"
-    )
+    header = f"  {'#':>2}  {'Label':<35} {'Expected':<12} {'Clutchness':>12} {'Best eval':>10} {'2nd best':>10}"
     print(header)
-    print(f"  {'--':>2}  {'-'*35} {'-'*12} {'-'*12} {'-'*10} {'-'*10}")
+    print(f"  {'--':>2}  {'-' * 35} {'-' * 12} {'-' * 12} {'-' * 10} {'-' * 10}")
 
     for i, pos in enumerate(CALIBRATION_POSITIONS, start=1):
         label = pos["label"]
@@ -229,24 +230,26 @@ def run_part2():
 
         # Create session + evalmoves
         sid = create_session(fen)
-        r = requests.post(f"{BASE_URL}/evalmoves", json={
-            "session_id": sid,
-            "maxdepth": 5,
-        })
+        r = requests.post(
+            f"{BASE_URL}/evalmoves",
+            json={
+                "session_id": sid,
+                "maxdepth": 5,
+            },
+        )
 
-        t.test(f"[{i}. {label}] /evalmoves returns 200",
-             r.status_code == 200, f"got {r.status_code}")
+        t.test(f"[{i}. {label}] /evalmoves returns 200", r.status_code == 200, f"got {r.status_code}")
         data = r.json()
 
-        t.test(f"[{i}. {label}] has clutchness", "clutchness" in data,
-             f"keys: {list(data.keys())}")
-        t.test(f"[{i}. {label}] has moves", "moves" in data,
-             f"keys: {list(data.keys())}")
+        t.test(f"[{i}. {label}] has clutchness", "clutchness" in data, f"keys: {list(data.keys())}")
+        t.test(f"[{i}. {label}] has moves", "moves" in data, f"keys: {list(data.keys())}")
 
         clutchness = data.get("clutchness")
-        t.test(f"[{i}. {label}] clutchness is numeric",
-             isinstance(clutchness, (int, float)),
-             f"got {clutchness!r} (type {type(clutchness).__name__})")
+        t.test(
+            f"[{i}. {label}] clutchness is numeric",
+            isinstance(clutchness, (int, float)),
+            f"got {clutchness!r} (type {type(clutchness).__name__})",
+        )
 
         moves_dict = data.get("moves", {})
         best_eval, second_eval = extract_top_two_evals(moves_dict)
@@ -255,10 +258,7 @@ def run_part2():
         best_str = f"{best_eval}" if best_eval is not None else "n/a"
         second_str = f"{second_eval}" if second_eval is not None else "n/a"
 
-        print(
-            f"  {i:>2}  {label:<35} {expected:<12} "
-            f"{clutch_str:>12} {best_str:>10} {second_str:>10}"
-        )
+        print(f"  {i:>2}  {label:<35} {expected:<12} {clutch_str:>12} {best_str:>10} {second_str:>10}")
 
     print()
 

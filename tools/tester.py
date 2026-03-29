@@ -70,9 +70,7 @@ class Perft(Command):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument(
-            "file", type=argparse.FileType("r"), help="such as tests/queen.fen."
-        )
+        parser.add_argument("file", type=argparse.FileType("r"), help="such as tests/queen.fen.")
         parser.add_argument("--depth", type=int, default=3)
 
     @classmethod
@@ -108,18 +106,14 @@ class Bench(Command):
 
     @classmethod
     def add_arguments(self, parser):
-        parser.add_argument(
-            "file", type=argparse.FileType("r"), help="such as tests/mate{1,2,3}.fen."
-        )
+        parser.add_argument("file", type=argparse.FileType("r"), help="such as tests/mate{1,2,3}.fen.")
         parser.add_argument(
             "--depth",
             type=int,
             default=100,
             help="Maximum plies at which to find the mate",
         )
-        parser.add_argument(
-            "--limit", type=int, default=10000, help="Maximum positions to analyse"
-        )
+        parser.add_argument("--limit", type=int, default=10000, help="Maximum positions to analyse")
 
     @classmethod
     async def run(self, engine, args):
@@ -140,7 +134,7 @@ class Bench(Command):
             total_nodes += info.get("nodes", 0)
 
         print(f"Total nodes: {total_nodes}.")
-        print(f"Average knps: {round(total_nodes/(time.time() - start)/1000, 2)}.")
+        print(f"Average knps: {round(total_nodes / (time.time() - start) / 1000, 2)}.")
 
 
 ###############################################################################
@@ -190,12 +184,12 @@ def info_to_desc(info):
     if "nodes" in info and "time" in info:
         # Add 1 to denominator, since time could be rounded to 0
         nps = info["nodes"] / (info["time"] + 1)
-        desc.append(f"knps: {round(nps/1000, 2)}")
+        desc.append(f"knps: {round(nps / 1000, 2)}")
     if "depth" in info:
         desc.append(f"depth: {info['depth']}")
     if "score" in info:
         #:wprint(dir(info['score']))
-        desc.append(f"score: {info['score'].pov(chess.WHITE).cp/100:.1f}")
+        desc.append(f"score: {info['score'].pov(chess.WHITE).cp / 100:.1f}")
     return ", ".join(desc)
 
 
@@ -238,9 +232,7 @@ class Mate(Command):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument(
-            "file", type=argparse.FileType("r"), help="such as tests/mate{1,2,3}.fen."
-        )
+        parser.add_argument("file", type=argparse.FileType("r"), help="such as tests/mate{1,2,3}.fen.")
         parser.add_argument(
             "--limit",
             type=int,
@@ -291,9 +283,7 @@ class Draw(Command):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument(
-            "file", type=argparse.FileType("r"), help="such as tests/stalemate2.fen."
-        )
+        parser.add_argument("file", type=argparse.FileType("r"), help="such as tests/stalemate2.fen.")
         add_limit_argument(parser)
 
     @classmethod
@@ -306,7 +296,7 @@ class Draw(Command):
             total += 1
             board, _ = chess.Board.from_epd(line)
             with await engine.analysis(board, limit) as analysis:
-                last_lower = -10**10
+                last_lower = -(10**10)
                 last_upper = 10**10
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
@@ -315,9 +305,9 @@ class Draw(Command):
                     score = info["score"]
                     if score.is_mate():
                         continue
-                    if info.get('lowerbound'):
+                    if info.get("lowerbound"):
                         last_lower = score.relative.cp
-                    elif info.get('upperbound'):
+                    elif info.get("upperbound"):
                         last_upper = score.relative.cp
                     elif score.relative.cp == 0:
                         success += 1
@@ -330,7 +320,7 @@ class Draw(Command):
                 else:
                     if not args.quiet:
                         print("Failed on", line.strip())
-                        print("Result:", info, 'lower', last_lower, 'upper', last_upper)
+                        print("Result:", info, "lower", last_lower, "upper", last_upper)
                         pass
         print(f"Succeeded in {success}/{total} cases.")
         if not args.quiet:
@@ -350,9 +340,7 @@ class Best(Command):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument(
-            "file", type=argparse.FileType("r"), help="such as bratko_kopec_test.epd."
-        )
+        parser.add_argument("file", type=argparse.FileType("r"), help="such as bratko_kopec_test.epd.")
         parser.add_argument(
             "--limit",
             type=int,
@@ -392,13 +380,13 @@ class Best(Command):
                 if result.move in opts["bm"]:
                     points += 1
                 else:
-                    errors.append(f'Gave move {result.move} rather than {opts["bm"]}')
+                    errors.append(f"Gave move {result.move} rather than {opts['bm']}")
             if "am" in opts:
                 total += 1
                 if result.move not in opts["am"]:
                     points += 1
                 else:
-                    errors.append(f'Gave move {result.move} which is in {opts["am"]}')
+                    errors.append(f"Gave move {result.move} which is in {opts['am']}")
             if not args.quiet and errors:
                 print("Failed on", line.strip())
                 for er in errors:
@@ -415,17 +403,11 @@ class Best(Command):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run various tests for speed and correctness of sunfish."
-    )
+    parser = argparse.ArgumentParser(description="Run various tests for speed and correctness of sunfish.")
     parser.add_argument("args", help="Command and arguments to run")
-    parser.add_argument(
-        "--debug", action="store_true", help="Write lots of extra stuff"
-    )
+    parser.add_argument("--debug", action="store_true", help="Write lots of extra stuff")
     parser.add_argument("--quiet", action="store_true", help="Only write pass/fail")
-    parser.add_argument(
-        "--xboard", action="store_true", help="Use xboard protocol instead of uci"
-    )
+    parser.add_argument("--xboard", action="store_true", help="Use xboard protocol instead of uci")
     subparsers = parser.add_subparsers()
     subparsers.required = True
 

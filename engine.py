@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 # Engine errors — raised instead of returning (error_dict, status_code) tuples
 # ---------------------------------------------------------------------------
 
+
 class EngineError(Exception):
     """Error from engine operations, carrying an HTTP status code."""
+
     def __init__(self, message, status_code=400):
         super().__init__(message)
         self.message = message
@@ -169,7 +171,7 @@ def build_history(fen, moves_str=""):
     pos = from_fen(*fen_parts[:6])
     color = fen_parts[1]
 
-    if color == 'b':
+    if color == "b":
         hist = [pos.rotate(), pos]
     else:
         hist = [pos]
@@ -217,10 +219,7 @@ def _get_legal_moves_from_pos(pos, white_pov):
             if legal:
                 if white_pov:
                     sq = sunfish.render(i)
-                    move_strs = [
-                        sunfish.render(m[0]) + sunfish.render(m[1]) + m[2].lower()
-                        for m in legal
-                    ]
+                    move_strs = [sunfish.render(m[0]) + sunfish.render(m[1]) + m[2].lower() for m in legal]
                 else:
                     sq = sunfish.render(sunfish.flip_coord(i))
                     move_strs = [
@@ -393,7 +392,7 @@ def score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
         # Sort and select top candidates
         quick_scored.sort(key=lambda x: x[2], reverse=True)
         buffer_size = min(5, max(2, top_n // 2))
-        top_candidates = quick_scored[:min(top_n + buffer_size, len(quick_scored))]
+        top_candidates = quick_scored[: min(top_n + buffer_size, len(quick_scored))]
 
         # Deep evaluation for top candidates
         shallow_depth = max(3, final_depth - 3)
@@ -427,8 +426,7 @@ def select_best_move(my_pv, scored_moves, ignore_squares):
     if my_pv and len(my_pv) >= 2:
         potential_best = my_pv[1]
         move_from = potential_best[:2]
-        is_ignored = (ignore_squares and len(ignore_squares) > 0
-                      and move_from in ignore_squares)
+        is_ignored = ignore_squares and len(ignore_squares) > 0 and move_from in ignore_squares
         if not is_ignored:
             return potential_best
 
@@ -458,9 +456,7 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
         return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
 
     t0 = time.perf_counter()
-    scored_moves, clutchness_val = score_moves(
-        searcher, pos, legal_moves, white_pov, final_depth, top_n
-    )
+    scored_moves, clutchness_val = score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n)
     t_score = time.perf_counter() - t0
 
     # PV extraction + score refinement for fast path
@@ -497,12 +493,12 @@ def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"
     position = hist[-1]
 
     num_moves = len(moves_history.split()) if moves_history.strip() else 0
-    if initial_side == 'w':
-        effective_side = 'w' if (num_moves % 2 == 0) else 'b'
+    if initial_side == "w":
+        effective_side = "w" if (num_moves % 2 == 0) else "b"
     else:
-        effective_side = 'b' if (num_moves % 2 == 0) else 'w'
+        effective_side = "b" if (num_moves % 2 == 0) else "w"
 
-    if effective_side == 'b':
+    if effective_side == "b":
         move_from = sunfish.flip_coord(sunfish.parse(bestmove[:2]))
         move_to = sunfish.flip_coord(sunfish.parse(bestmove[2:4]))
     else:
@@ -536,9 +532,17 @@ def _resolve_context(session_id, fen, moves_history, search_fn):
         return result, hist
 
 
-def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
-                   precision=0.0, top_n=1, ignore_squares=None,
-                   session_id=None, clutchness=False):
+def get_best_moves(
+    fen=None,
+    moves_history="",
+    movetime=None,
+    maxdepth=15,
+    precision=0.0,
+    top_n=1,
+    ignore_squares=None,
+    session_id=None,
+    clutchness=False,
+):
     """Compute the best move(s) for a position.
 
     Two modes:
@@ -556,10 +560,7 @@ def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
 
     def do_search(searcher, hist):
         sunfish._precision = precision
-        return _search_best_moves(
-            searcher, hist, max_movetime, maxdepth,
-            internal_top_n, ignore_squares or []
-        )
+        return _search_best_moves(searcher, hist, max_movetime, maxdepth, internal_top_n, ignore_squares or [])
 
     result, hist = _resolve_context(session_id, fen, moves_history, do_search)
 
@@ -571,11 +572,9 @@ def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
         initial_side = fen.split()[1]
     else:
         # Infer from session: odd hist length = white to move
-        initial_side = 'w' if len(hist) % 2 == 1 else 'b'
+        initial_side = "w" if len(hist) % 2 == 1 else "b"
 
-    is_check_val = _compute_check_after_move(
-        result["bestmove"], hist, moves_history, initial_side
-    )
+    is_check_val = _compute_check_after_move(result["bestmove"], hist, moves_history, initial_side)
 
     response = {
         "bestmoves": result["scored_moves"][:top_n],
@@ -589,8 +588,7 @@ def get_best_moves(fen=None, moves_history="", movetime=None, maxdepth=15,
     return response
 
 
-def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None,
-                        session_id=None):
+def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None, session_id=None):
     """Get all legal moves with evaluation scores for each.
 
     Runs a search to populate the TT, then scores each legal move via TT
@@ -685,8 +683,7 @@ def _evaluate_all_moves(searcher, hist, max_movetime, max_depth):
     return {"move_evals": move_evals, "depth_reached": final_depth}
 
 
-def apply_move(session_id, move_str, is_computer_turn=False,
-               maxdepth=15, movetime=None, fen=None, moves_history=""):
+def apply_move(session_id, move_str, is_computer_turn=False, maxdepth=15, movetime=None, fen=None, moves_history=""):
     """Apply a move to a session and optionally auto-compute the response.
 
     On computer turns, automatically computes and returns the best move(s)
@@ -715,10 +712,7 @@ def apply_move(session_id, move_str, is_computer_turn=False,
     # Auto-compute on computer turn
     if is_computer_turn:
         try:
-            best = get_best_moves(
-                session_id=session_id, maxdepth=maxdepth,
-                movetime=movetime, clutchness=True
-            )
+            best = get_best_moves(session_id=session_id, maxdepth=maxdepth, movetime=movetime, clutchness=True)
             result["bestmoves"] = best.get("bestmoves", [])
             result["clutchness"] = best.get("clutchness")
         except EngineError:
@@ -728,9 +722,18 @@ def apply_move(session_id, move_str, is_computer_turn=False,
     return result
 
 
-def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
-                  top_n=1, ignore_squares=None, peek_next=False, peek_maxdepth=5,
-                  fen=None, moves_history=""):
+def computer_turn(
+    session_id,
+    maxdepth=15,
+    movetime=None,
+    precision=0.0,
+    top_n=1,
+    ignore_squares=None,
+    peek_next=False,
+    peek_maxdepth=5,
+    fen=None,
+    moves_history="",
+):
     """Computer plays a turn: search, apply best move, detect game over, optionally peek.
 
     All operations in a single session lock acquisition for thread safety and TT reuse.
@@ -748,15 +751,11 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
         sunfish._precision = precision
 
         # 1. Search for best move
-        result = _search_best_moves(
-            searcher, hist, max_movetime, maxdepth,
-            top_n, ignore_squares or []
-        )
+        result = _search_best_moves(searcher, hist, max_movetime, maxdepth, top_n, ignore_squares or [])
 
         if result["bestmove"] == "(none)":
             game_over = _detect_game_over(hist[-1])
-            return {"move": None, "eval": None, "check": False, "game_over": game_over,
-                    "ply": len(session.hist)}
+            return {"move": None, "eval": None, "check": False, "game_over": game_over, "ply": len(session.hist)}
 
         best_move_str = result["bestmove"]
         best_eval = result["scored_moves"][0][1] if result.get("scored_moves") else 0
@@ -786,9 +785,9 @@ def computer_turn(session_id, maxdepth=15, movetime=None, precision=0.0,
     return session.run_search(do_turn)
 
 
-def player_move(session_id, move_str, grade=False, grade_maxdepth=8,
-                peek_next=False, peek_maxdepth=5,
-                fen=None, moves_history=""):
+def player_move(
+    session_id, move_str, grade=False, grade_maxdepth=8, peek_next=False, peek_maxdepth=5, fen=None, moves_history=""
+):
     """Player makes a move: validate, optionally grade, apply, detect game over, optionally peek.
 
     All operations in a single session lock acquisition.

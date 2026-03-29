@@ -8,20 +8,17 @@ import json
 
 from helpers import BASE_URL
 
+
 def test_ignore_squares(fen, ignore_squares, description):
     """Test the bestmove endpoint with ignore_squares parameter."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"Test: {description}")
     print(f"FEN: {fen}")
     print(f"Ignoring squares: {ignore_squares}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     # Test without ignoring squares
-    payload_normal = {
-        "fen": fen,
-        "maxdepth": 4,
-        "top_n": 5
-    }
+    payload_normal = {"fen": fen, "maxdepth": 4, "top_n": 5}
 
     response_normal = requests.post(f"{BASE_URL}/bestmove", json=payload_normal)
 
@@ -30,7 +27,7 @@ def test_ignore_squares(fen, ignore_squares, description):
         print(f"\n✓ Without ignore_squares:")
         print(f"  Best move: {data_normal.get('bestmove')}")
         print(f"  Top 5 moves:")
-        for i, (move, score) in enumerate(data_normal.get('allmoves', [])[:5], 1):
+        for i, (move, score) in enumerate(data_normal.get("allmoves", [])[:5], 1):
             square_from = move[:2]
             print(f"    {i}. {move} (from {square_from}): {score}")
     else:
@@ -38,12 +35,7 @@ def test_ignore_squares(fen, ignore_squares, description):
         return
 
     # Test with ignoring squares
-    payload_ignore = {
-        "fen": fen,
-        "maxdepth": 4,
-        "top_n": 5,
-        "ignore_squares": ignore_squares
-    }
+    payload_ignore = {"fen": fen, "maxdepth": 4, "top_n": 5, "ignore_squares": ignore_squares}
 
     response_ignore = requests.post(f"{BASE_URL}/bestmove", json=payload_ignore)
 
@@ -52,12 +44,12 @@ def test_ignore_squares(fen, ignore_squares, description):
         print(f"\n✓ With ignore_squares {ignore_squares}:")
         print(f"  Best move: {data_ignore.get('bestmove')}")
         print(f"  Top 5 moves:")
-        for i, (move, score) in enumerate(data_ignore.get('allmoves', [])[:5], 1):
+        for i, (move, score) in enumerate(data_ignore.get("allmoves", [])[:5], 1):
             square_from = move[:2]
             print(f"    {i}. {move} (from {square_from}): {score}")
 
         # Verify that no moves start from ignored squares
-        all_moves = data_ignore.get('allmoves', [])
+        all_moves = data_ignore.get("allmoves", [])
         for move, score in all_moves:
             square_from = move[:2]
             if square_from in ignore_squares:
@@ -69,6 +61,7 @@ def test_ignore_squares(fen, ignore_squares, description):
         print(f"✗ Error: {response_ignore.status_code}")
         print(f"  {response_ignore.text}")
 
+
 def main():
     print("Testing ignore_squares parameter implementation")
     print("Make sure the server is running on port 5500!")
@@ -76,59 +69,38 @@ def main():
     start_pos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
     # Test 1: Ignore knight squares (g1, b1)
-    test_ignore_squares(
-        start_pos,
-        ["g1", "b1"],
-        "Starting position - ignore both knights"
-    )
+    test_ignore_squares(start_pos, ["g1", "b1"], "Starting position - ignore both knights")
 
     # Test 2: Ignore all pawn squares
-    test_ignore_squares(
-        start_pos,
-        ["a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2"],
-        "Starting position - ignore all pawns"
-    )
+    test_ignore_squares(start_pos, ["a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2"], "Starting position - ignore all pawns")
 
     # Test 3: Complex middlegame position
     middlegame = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
-    test_ignore_squares(
-        middlegame,
-        ["f3", "c4"],
-        "Middlegame - ignore knight on f3 and bishop on c4"
-    )
+    test_ignore_squares(middlegame, ["f3", "c4"], "Middlegame - ignore knight on f3 and bishop on c4")
 
     # Test 4: Ignore best move square
-    test_ignore_squares(
-        start_pos,
-        ["g1"],
-        "Starting position - ignore likely best move (g1 knight)"
-    )
+    test_ignore_squares(start_pos, ["g1"], "Starting position - ignore likely best move (g1 knight)")
 
     # Test 5: Regression test for fast-path bug (top_n=1)
     # This tests the bug where ignored squares were not filtered in fast path
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"Test: Regression test for fast-path bug (top_n=1)")
     print(f"Testing specific case where d2, d1, e1 are ignored")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     regression_fen = "3kb3/3pp3/8/8/8/8/3P4/2NBK3 w KQkq - 0 1"
-    regression_payload = {
-        "fen": regression_fen,
-        "maxdepth": 9,
-        "top_n": 1,
-        "ignore_squares": ["d2", "d1", "e1"]
-    }
+    regression_payload = {"fen": regression_fen, "maxdepth": 9, "top_n": 1, "ignore_squares": ["d2", "d1", "e1"]}
 
     response = requests.post(f"{BASE_URL}/bestmove", json=regression_payload)
     if response.status_code == 200:
         data = response.json()
-        bestmoves = data.get('bestmoves', [])
+        bestmoves = data.get("bestmoves", [])
         if bestmoves:
             best_move = bestmoves[0][0]
             move_from = best_move[:2]
             print(f"\n✓ Best move: {best_move} (from {move_from})")
 
-            if move_from in regression_payload['ignore_squares']:
+            if move_from in regression_payload["ignore_squares"]:
                 print(f"✗ REGRESSION FAIL: Move {best_move} starts from ignored square {move_from}!")
             else:
                 print(f"✓ PASS: Move does not start from ignored squares")
@@ -137,9 +109,10 @@ def main():
     else:
         print(f"✗ Error: {response.status_code}")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("All tests completed!")
-    print("="*70)
+    print("=" * 70)
+
 
 if __name__ == "__main__":
     try:

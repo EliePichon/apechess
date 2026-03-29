@@ -6,9 +6,7 @@ dont = open("3fold_dont.pgn", "w")
 with open("test_files/3fold.pgn") as file:
     for i, game in enumerate(iter(lambda: chess.pgn.read_game(file), None)):
         print(i)
-        res = engine.analyse(
-            game.end().parent.board(), limit=chess.engine.Limit(time=0.01)
-        )
+        res = engine.analyse(game.end().parent.board(), limit=chess.engine.Limit(time=0.01))
         if res.pv[0] != game.end().move:
             # We skip situations that re too ambigious
             if res.score.is_mate() or abs(res.score.relative.cp) > 200:

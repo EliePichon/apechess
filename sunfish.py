@@ -12,8 +12,8 @@ import tools.uci as uci
 
 # If we could rely on the env -S argument, we could just use "pypy3 -u"
 # as the shebang to unbuffer stdout. But alas we have to do this instead:
-#from functools import partial
-#print = partial(print, flush=True)
+# from functools import partial
+# print = partial(print, flush=True)
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -28,65 +28,484 @@ version = "sunfish 2023"
 # That's pretty good given we have 64*6 = 384 values.
 # Though probably we could do better...
 # For one thing, they could easily all fit into int8.
-piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000, "O": 0,
-         "A": 100, "C": 280, "D": 320, "T": 479, "X": 929, "Y": 60000}
+piece = {
+    "P": 100,
+    "N": 280,
+    "B": 320,
+    "R": 479,
+    "Q": 929,
+    "K": 60000,
+    "O": 0,
+    "A": 100,
+    "C": 280,
+    "D": 320,
+    "T": 479,
+    "X": 929,
+    "Y": 60000,
+}
 pst = {
-    'P': (   0,   0,   0,   0,   0,   0,   0,   0,
-            78,  83,  86,  73, 102,  82,  85,  90,
-             7,  29,  21,  44,  40,  31,  44,   7,
-           -17,  16,  -2,  15,  14,   0,  15, -13,
-           -26,   3,  10,   9,   6,   1,   0, -23,
-           -22,   9,   5, -11, -10,  -2,   3, -19,
-           -31,   8,  -7, -37, -36, -14,   3, -31,
-             0,   0,   0,   0,   0,   0,   0,   0),
-    'N': ( -66, -53, -75, -75, -10, -55, -58, -70,
-            -3,  -6, 100, -36,   4,  62,  -4, -14,
-            10,  67,   1,  74,  73,  27,  62,  -2,
-            24,  24,  45,  37,  33,  41,  25,  17,
-            -1,   5,  31,  21,  22,  35,   2,   0,
-           -18,  10,  13,  22,  18,  15,  11, -14,
-           -23, -15,   2,   0,   2,   0, -23, -20,
-           -74, -23, -26, -24, -19, -35, -22, -69),
-    'B': ( -59, -78, -82, -76, -23,-107, -37, -50,
-           -11,  20,  35, -42, -39,  31,   2, -22,
-            -9,  39, -32,  41,  52, -10,  28, -14,
-            25,  17,  20,  34,  26,  25,  15,  10,
-            13,  10,  17,  23,  17,  16,   0,   7,
-            14,  25,  24,  15,   8,  25,  20,  15,
-            19,  20,  11,   6,   7,   6,  20,  16,
-            -7,   2, -15, -12, -14, -15, -10, -10),
-    'R': (  35,  29,  33,   4,  37,  33,  56,  50,
-            55,  29,  56,  67,  55,  62,  34,  60,
-            19,  35,  28,  33,  45,  27,  25,  15,
-             0,   5,  16,  13,  18,  -4,  -9,  -6,
-           -28, -35, -16, -21, -13, -29, -46, -30,
-           -42, -28, -42, -25, -25, -35, -26, -46,
-           -53, -38, -31, -26, -29, -43, -44, -53,
-           -30, -24, -18,   5,  -2, -18, -31, -32),
-    'Q': (   6,   1,  -8,-104,  69,  24,  88,  26,
-            14,  32,  60, -10,  20,  76,  57,  24,
-            -2,  43,  32,  60,  72,  63,  43,   2,
-             1, -16,  22,  17,  25,  20, -13,  -6,
-           -14, -15,  -2,  -5,  -1, -10, -20, -22,
-           -30,  -6, -13, -11, -16, -11, -16, -27,
-           -36, -18,   0, -19, -15, -15, -21, -38,
-           -39, -30, -31, -13, -31, -36, -34, -42),
-    'K': (   4,  54,  47, -99, -99,  60,  83, -62,
-           -32,  10,  55,  56,  56,  55,  10,   3,
-           -62,  12, -57,  44, -67,  28,  37, -31,
-           -55,  50,  11,  -4, -19,  13,   0, -49,
-           -55, -43, -52, -28, -51, -47,  -8, -50,
-           -47, -42, -43, -79, -64, -32, -29, -32,
-            -4,   3, -14, -50, -57, -18,  13,   4,
-            17,  30,  -3, -14,   6,  -1,  40,  18),
-    'O': (   0,   0,   0,   0,   0,   0,   0,   0,
-             0,   0,   0,   0,   0,   0,   0,   0,
-             0,   0,   0,   0,   0,   0,   0,   0,
-             0,   0,   0,   0,   0,   0,   0,   0,
-             0,   0,   0,   0,   0,   0,   0,   0,
-             0,   0,   0,   0,   0,   0,   0,   0,
-             0,   0,   0,   0,   0,   0,   0,   0,
-             0,   0,   0,   0,   0,   0,   0,   0),
+    "P": (
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        78,
+        83,
+        86,
+        73,
+        102,
+        82,
+        85,
+        90,
+        7,
+        29,
+        21,
+        44,
+        40,
+        31,
+        44,
+        7,
+        -17,
+        16,
+        -2,
+        15,
+        14,
+        0,
+        15,
+        -13,
+        -26,
+        3,
+        10,
+        9,
+        6,
+        1,
+        0,
+        -23,
+        -22,
+        9,
+        5,
+        -11,
+        -10,
+        -2,
+        3,
+        -19,
+        -31,
+        8,
+        -7,
+        -37,
+        -36,
+        -14,
+        3,
+        -31,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ),
+    "N": (
+        -66,
+        -53,
+        -75,
+        -75,
+        -10,
+        -55,
+        -58,
+        -70,
+        -3,
+        -6,
+        100,
+        -36,
+        4,
+        62,
+        -4,
+        -14,
+        10,
+        67,
+        1,
+        74,
+        73,
+        27,
+        62,
+        -2,
+        24,
+        24,
+        45,
+        37,
+        33,
+        41,
+        25,
+        17,
+        -1,
+        5,
+        31,
+        21,
+        22,
+        35,
+        2,
+        0,
+        -18,
+        10,
+        13,
+        22,
+        18,
+        15,
+        11,
+        -14,
+        -23,
+        -15,
+        2,
+        0,
+        2,
+        0,
+        -23,
+        -20,
+        -74,
+        -23,
+        -26,
+        -24,
+        -19,
+        -35,
+        -22,
+        -69,
+    ),
+    "B": (
+        -59,
+        -78,
+        -82,
+        -76,
+        -23,
+        -107,
+        -37,
+        -50,
+        -11,
+        20,
+        35,
+        -42,
+        -39,
+        31,
+        2,
+        -22,
+        -9,
+        39,
+        -32,
+        41,
+        52,
+        -10,
+        28,
+        -14,
+        25,
+        17,
+        20,
+        34,
+        26,
+        25,
+        15,
+        10,
+        13,
+        10,
+        17,
+        23,
+        17,
+        16,
+        0,
+        7,
+        14,
+        25,
+        24,
+        15,
+        8,
+        25,
+        20,
+        15,
+        19,
+        20,
+        11,
+        6,
+        7,
+        6,
+        20,
+        16,
+        -7,
+        2,
+        -15,
+        -12,
+        -14,
+        -15,
+        -10,
+        -10,
+    ),
+    "R": (
+        35,
+        29,
+        33,
+        4,
+        37,
+        33,
+        56,
+        50,
+        55,
+        29,
+        56,
+        67,
+        55,
+        62,
+        34,
+        60,
+        19,
+        35,
+        28,
+        33,
+        45,
+        27,
+        25,
+        15,
+        0,
+        5,
+        16,
+        13,
+        18,
+        -4,
+        -9,
+        -6,
+        -28,
+        -35,
+        -16,
+        -21,
+        -13,
+        -29,
+        -46,
+        -30,
+        -42,
+        -28,
+        -42,
+        -25,
+        -25,
+        -35,
+        -26,
+        -46,
+        -53,
+        -38,
+        -31,
+        -26,
+        -29,
+        -43,
+        -44,
+        -53,
+        -30,
+        -24,
+        -18,
+        5,
+        -2,
+        -18,
+        -31,
+        -32,
+    ),
+    "Q": (
+        6,
+        1,
+        -8,
+        -104,
+        69,
+        24,
+        88,
+        26,
+        14,
+        32,
+        60,
+        -10,
+        20,
+        76,
+        57,
+        24,
+        -2,
+        43,
+        32,
+        60,
+        72,
+        63,
+        43,
+        2,
+        1,
+        -16,
+        22,
+        17,
+        25,
+        20,
+        -13,
+        -6,
+        -14,
+        -15,
+        -2,
+        -5,
+        -1,
+        -10,
+        -20,
+        -22,
+        -30,
+        -6,
+        -13,
+        -11,
+        -16,
+        -11,
+        -16,
+        -27,
+        -36,
+        -18,
+        0,
+        -19,
+        -15,
+        -15,
+        -21,
+        -38,
+        -39,
+        -30,
+        -31,
+        -13,
+        -31,
+        -36,
+        -34,
+        -42,
+    ),
+    "K": (
+        4,
+        54,
+        47,
+        -99,
+        -99,
+        60,
+        83,
+        -62,
+        -32,
+        10,
+        55,
+        56,
+        56,
+        55,
+        10,
+        3,
+        -62,
+        12,
+        -57,
+        44,
+        -67,
+        28,
+        37,
+        -31,
+        -55,
+        50,
+        11,
+        -4,
+        -19,
+        13,
+        0,
+        -49,
+        -55,
+        -43,
+        -52,
+        -28,
+        -51,
+        -47,
+        -8,
+        -50,
+        -47,
+        -42,
+        -43,
+        -79,
+        -64,
+        -32,
+        -29,
+        -32,
+        -4,
+        3,
+        -14,
+        -50,
+        -57,
+        -18,
+        13,
+        4,
+        17,
+        30,
+        -3,
+        -14,
+        6,
+        -1,
+        40,
+        18,
+    ),
+    "O": (
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ),
 }
 # Pad tables and join piece and pst dictionaries
 for k, table in pst.items():
@@ -96,8 +515,8 @@ for k, table in pst.items():
 
 # Powered pieces (rock-landing ability) share PSTs with their base pieces
 # Mapping: A=Pawn, C=Knight, D=Bishop, T=Rook, X=Queen, Y=King
-POWERED_TO_BASE = {'A': 'P', 'C': 'N', 'D': 'B', 'T': 'R', 'X': 'Q', 'Y': 'K'}
-POWERED_PIECES = frozenset('ACDTXY')
+POWERED_TO_BASE = {"A": "P", "C": "N", "D": "B", "T": "R", "X": "Q", "Y": "K"}
+POWERED_PIECES = frozenset("ACDTXY")
 for powered, base in POWERED_TO_BASE.items():
     pst[powered] = pst[base]
 
@@ -109,13 +528,20 @@ for powered, base in POWERED_TO_BASE.items():
 # fast detection of moves that don't stay within the board.
 A1, H1, A8, H8 = 91, 98, 21, 28
 
+
 def _update_castling(i, j, wc, bc):
     """Update castling rights when a piece moves from i or captures on j."""
-    if i == A1: wc = (False, wc[1])
-    if i == H1: wc = (wc[0], False)
-    if j == A8: bc = (bc[0], False)
-    if j == H8: bc = (False, bc[1])
+    if i == A1:
+        wc = (False, wc[1])
+    if i == H1:
+        wc = (wc[0], False)
+    if j == A8:
+        bc = (bc[0], False)
+    if j == H8:
+        bc = (False, bc[1])
     return wc, bc
+
+
 initial = (
     "         \n"  #   0 -  9
     "         \n"  #  10 - 19
@@ -134,13 +560,13 @@ initial = (
 # Lists of possible moves for each piece type.
 N, E, S, W = -10, 1, 10, -1
 directions = {
-    "P": (N, N+N, N+W, N+E),
-    "N": (N+N+E, E+N+E, E+S+E, S+S+E, S+S+W, W+S+W, W+N+W, N+N+W),
-    "B": (N+E, S+E, S+W, N+W),
+    "P": (N, N + N, N + W, N + E),
+    "N": (N + N + E, E + N + E, E + S + E, S + S + E, S + S + W, W + S + W, W + N + W, N + N + W),
+    "B": (N + E, S + E, S + W, N + W),
     "R": (N, E, S, W),
-    "Q": (N, E, S, W, N+E, S+E, S+W, N+W),
-    "K": (N, E, S, W, N+E, S+E, S+W, N+W),
-    "O": ()  # Rocks don't move
+    "Q": (N, E, S, W, N + E, S + E, S + W, N + W),
+    "K": (N, E, S, W, N + E, S + E, S + W, N + W),
+    "O": (),  # Rocks don't move
 }
 # Powered pieces share directions with their base pieces
 for _powered, _base in POWERED_TO_BASE.items():
@@ -156,9 +582,11 @@ PROMOTION_PIECES = {"A": "CDTX", "P": "NBRQ"}
 # Module-level precision for randomized play (set by engine.py before search)
 _precision = 0.0
 
+
 def _put(board, i, p):
     """Replace character at index i in board string with p."""
-    return board[:i] + p + board[i + 1:]
+    return board[:i] + p + board[i + 1 :]
+
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
@@ -175,9 +603,9 @@ EVAL_ROUGHNESS = 15
 
 # minifier-hide start
 opt_ranges = dict(
-    QS = (0, 300),
-    QS_A = (0, 300),
-    EVAL_ROUGHNESS = (0, 50),
+    QS=(0, 300),
+    QS_A=(0, 300),
+    EVAL_ROUGHNESS=(0, 50),
 )
 # minifier-hide end
 
@@ -205,7 +633,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # as defined in the 'directions' map. The rays are broken e.g. by
         # captures or immediately in case of pieces such as knights.
         for i, p in enumerate(self.board):
-            if not p.isupper() or p == 'O':
+            if not p.isupper() or p == "O":
                 continue
             for d in directions[p]:
                 for j in count(i + d, d):
@@ -215,22 +643,22 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                         break
                     if q.isupper():
                         # Uppercase rocks (O) block normal pieces but powered pieces can land on them
-                        if q == 'O' and p in POWERED_PIECES:
+                        if q == "O" and p in POWERED_PIECES:
                             pass  # powered piece can land on rock
                         else:
                             break
                     # Lowercase rocks (o, from rotation) block normal pieces but not powered ones
-                    if q == 'o' and p not in POWERED_PIECES:
+                    if q == "o" and p not in POWERED_PIECES:
                         break
                     # Pawn move, double move and capture
                     if p in PAWNS:
-                        if d in (N, N + N) and q != "." and not (q in ROCKS and p == 'A'): break
-                        if d == N + N and (i < A1 + N or self.board[i + N] != "."): break
+                        if d in (N, N + N) and q != "." and not (q in ROCKS and p == "A"):
+                            break
+                        if d == N + N and (i < A1 + N or self.board[i + N] != "."):
+                            break
                         if (
-                            d in (N + W, N + E)
-                            and q == "."
-                            and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
-                            #and j != self.ep and abs(j - self.kp) >= 2
+                            d in (N + W, N + E) and q == "." and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
+                            # and j != self.ep and abs(j - self.kp) >= 2
                         ):
                             break
                         # If we move to the last row, we can be anything
@@ -253,7 +681,10 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""
         return Position(
-            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
+            self.board[::-1].swapcase(),
+            -self.score,
+            self.bc,
+            self.wc,
             flip_coord(self.ep) if self.ep and not nullmove else 0,
             flip_coord(self.kp) if self.kp and not nullmove else 0,
         )
@@ -296,7 +727,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # Actual move
         score = pst[p][j] - pst[p][i]
         # Capture (exclude rocks which are not capturable)
-        if q.islower() and q != 'o':
+        if q.islower() and q != "o":
             score += pst[q.upper()][119 - j]
         # Castling check detection
         if abs(j - self.kp) < 2:
@@ -312,7 +743,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if j == self.ep:
                 score += pst[p][119 - (j + S)]
 
-         # Then apply the random factor:
+        # Then apply the random factor:
         if _precision > 0.0:
             factor = random.uniform(1 - _precision, 1 + _precision)
             score = int(score * factor)
@@ -338,7 +769,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if square is not None and move[0] != square:
                 continue  # Skip moves not starting from the specified square
             # Check legality (king not in check after move)
-            if not uci.can_kill_king (self.move(move)):
+            if not uci.can_kill_king(self.move(move)):
                 moves.append(move)
 
         return moves
@@ -363,10 +794,10 @@ class Searcher:
         self.gen_moves_time = 0.0
 
     def bound(self, pos, gamma, depth, can_null=True):
-        """ Let s* be the "true" score of the sub-tree we are searching.
-            The method returns r, where
-            if gamma >  s* then s* <= r < gamma  (A better upper bound)
-            if gamma <= s* then gamma <= r <= s* (A better lower bound) """
+        """Let s* be the "true" score of the sub-tree we are searching.
+        The method returns r, where
+        if gamma >  s* then s* <= r < gamma  (A better upper bound)
+        if gamma <= s* then gamma <= r <= s* (A better lower bound)"""
         self.nodes += 1
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
@@ -385,8 +816,10 @@ class Searcher:
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
         entry = self.tp_score.get((pos, depth, can_null), Entry(-MATE_UPPER, MATE_UPPER))
-        if entry.lower >= gamma: return entry.lower
-        if entry.upper < gamma: return entry.upper
+        if entry.lower >= gamma:
+            return entry.lower
+        if entry.upper < gamma:
+            return entry.upper
 
         # Let's not repeat positions. We don't chat
         # - at the root (can_null=False) since it is in history, but not a draw.
@@ -404,8 +837,8 @@ class Searcher:
             # For now we just solve this by not using null-move in very unbalanced positions.
             # TODO: We could actually use null-move in QS as well. Not sure it would be very useful.
             # But still.... We just have to move stand-pat to be before null-move.
-            #if depth > 2 and can_null and any(c in pos.board for c in "RBNQ"):
-            #if depth > 2 and can_null and any(c in pos.board for c in "RBNQ") and abs(pos.score) < 500:
+            # if depth > 2 and can_null and any(c in pos.board for c in "RBNQ"):
+            # if depth > 2 and can_null and any(c in pos.board for c in "RBNQ") and abs(pos.score) < 500:
             if depth > 2 and can_null and abs(pos.score) < 500:
                 yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
@@ -550,11 +983,13 @@ def flip_coord(i):
     """Mirror a board coordinate for the opponent's perspective (10x12 mailbox)."""
     return 119 - i
 
+
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
-#input = raw_input
+# input = raw_input
 
 # minifier-hide start
 if __name__ == "__main__":
     import sys, tools.uci
+
     tools.uci.run(sys.modules[__name__], hist[-1])

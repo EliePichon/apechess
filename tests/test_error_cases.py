@@ -15,45 +15,41 @@ ERROR_CASES = [
         "name": "Early Game - Italian Opening (7s timeout)",
         "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
         "movetime": 7000,
-        "maxdepth": 25
+        "maxdepth": 25,
     },
     {
         "name": "Early Game - Queen's Gambit (10s 500 error)",
         "fen": "rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R b KQkq - 2 4",
         "movetime": 10000,
-        "maxdepth": 25
+        "maxdepth": 25,
     },
     {
         "name": "Midgame - Complex Position (7s 500 error)",
         "fen": "r1bq1rk1/pp2bppp/2n1pn2/3p4/2PP4/1PN1PN2/PB2BPPP/R2QK2R w KQ - 2 9",
         "movetime": 7000,
-        "maxdepth": 25
-    }
+        "maxdepth": 25,
+    },
 ]
+
 
 def test_position(test_case, verbose=True):
     """Test a single position and return detailed results."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Testing: {test_case['name']}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"FEN: {test_case['fen']}")
     print(f"Movetime: {test_case['movetime']}ms")
     print(f"Maxdepth: {test_case['maxdepth']}")
     print()
 
-    payload = {
-        "fen": test_case["fen"],
-        "movetime": test_case["movetime"],
-        "maxdepth": test_case["maxdepth"],
-        "precision": 0.0
-    }
+    payload = {"fen": test_case["fen"], "movetime": test_case["movetime"], "maxdepth": test_case["maxdepth"], "precision": 0.0}
 
     try:
         print("Sending request...")
         response = requests.post(
             f"{BASE_URL}/bestmove",
             json=payload,
-            timeout=(test_case["movetime"] / 1000.0) + 15  # Extra buffer
+            timeout=(test_case["movetime"] / 1000.0) + 15,  # Extra buffer
         )
 
         print(f"Status code: {response.status_code}")
@@ -78,28 +74,25 @@ def test_position(test_case, verbose=True):
 
 
 def main():
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("ERROR CASE DIAGNOSTIC TEST")
-    print("="*80)
+    print("=" * 80)
     print(f"Testing {len(ERROR_CASES)} positions that failed in benchmark")
     print()
 
     results = []
     for test_case in ERROR_CASES:
         result = test_position(test_case)
-        results.append({
-            "name": test_case["name"],
-            "result": result
-        })
+        results.append({"name": test_case["name"], "result": result})
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("SUMMARY")
-    print("="*80)
+    print("=" * 80)
     for r in results:
         print(f"{r['name']:<60} {r['result']}")
 
-    success_count = sum(1 for r in results if r['result'] == "SUCCESS")
+    success_count = sum(1 for r in results if r["result"] == "SUCCESS")
     print(f"\n{success_count}/{len(results)} tests passed")
 
     if success_count < len(results):

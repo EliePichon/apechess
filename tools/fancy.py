@@ -58,9 +58,7 @@ async def load_engine_from_conf(engine_args, name, debug=False):
         _, engine = await chess.engine.popen_xboard(cmd, **popen_args)
     if hasattr(engine, "debug"):
         engine.debug(debug)
-    await engine.configure(
-        {opt["name"]: opt["value"] for opt in args.get("options", [])}
-    )
+    await engine.configure({opt["name"]: opt["value"] for opt in args.get("options", [])})
     return engine
 
 
@@ -99,7 +97,7 @@ def print_unicode_board(board, perspective=chess.WHITE):
     """Prints the position from a given perspective."""
     sc, ec = "\x1b[0;30;107m", "\x1b[0m"
     for r in range(8) if perspective == chess.BLACK else range(7, -1, -1):
-        line = [f"{sc} {r+1}"]
+        line = [f"{sc} {r + 1}"]
         for c in range(8) if perspective == chess.WHITE else range(7, -1, -1):
             color = "\x1b[48;5;255m" if (r + c) % 2 == 1 else "\x1b[48;5;253m"
             if board.move_stack:
@@ -108,9 +106,7 @@ def print_unicode_board(board, perspective=chess.WHITE):
                 elif board.move_stack[-1].from_square == 8 * r + c:
                     color = "\x1b[48;5;153m"
             piece = board.piece_at(8 * r + c)
-            line.append(
-                color + (chess.UNICODE_PIECE_SYMBOLS[piece.symbol()] if piece else " ")
-            )
+            line.append(color + (chess.UNICODE_PIECE_SYMBOLS[piece.symbol()] if piece else " "))
         print(" " + " ".join(line) + f" {sc} {ec}")
     if perspective == chess.WHITE:
         print(f" {sc}   a b c d e f g h  {ec}\n")
@@ -126,10 +122,7 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
         return play_result.move
 
     multipv = min(multipv, board.legal_moves.count())
-    with await engine.analysis(
-        board, limit, game=game_id, info=chess.engine.INFO_ALL, multipv=multipv or None
-    ) as analysis:
-
+    with await engine.analysis(board, limit, game=game_id, info=chess.engine.INFO_ALL, multipv=multipv or None) as analysis:
         infos = [None for _ in range(multipv)]
         first = True
         async for new_info in analysis:
@@ -151,14 +144,10 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
 
                 info = analysis.info
                 score = info["score"].relative
-                score = (
-                    f"Score: {score.score()}"
-                    if score.score() is not None
-                    else f"Mate in {score.mate()}"
-                )
+                score = f"Score: {score.score()}" if score.score() is not None else f"Mate in {score.mate()}"
                 print(
-                    f'{score}, nodes: {info.get("nodes", "N/A")}, nps: {info.get("nps", "N/A")},'
-                    f' time: {float(info.get("time", 0)):.1f}',
+                    f"{score}, nodes: {info.get('nodes', 'N/A')}, nps: {info.get('nps', 'N/A')},"
+                    f" time: {float(info.get('time', 0)):.1f}",
                     end="",
                 )
                 print()
@@ -171,23 +160,19 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
 
                     if "score" in info:
                         score = info["score"].relative
-                        score = (
-                            math.tanh(score.score() / 600)
-                            if score.score() is not None
-                            else score.mate()
-                        )
+                        score = math.tanh(score.score() / 600) if score.score() is not None else score.mate()
                         key, *val = info.get("string", "").split()
                         if key == "pv_nodes":
                             nodes = int(val[0])
                             rel = nodes / analysis.info["nodes"]
-                            score_rel = f"({score:.2f}, {rel*100:.0f}%)"
+                            score_rel = f"({score:.2f}, {rel * 100:.0f}%)"
                         else:
                             score_rel = f"({score:.2f})"
                     else:
                         score_rel = ""
 
                     # Something about N
-                    print(f'{info["multipv"]}: {score_rel} {variation}')
+                    print(f"{info['multipv']}: {score_rel} {variation}")
 
         return analysis.info["pv"][0]
 
@@ -210,9 +195,7 @@ async def play(engine, board, selfplay, pvs, time_limit, debug=False):
             if move is None:
                 return
         else:
-            move = await get_engine_move(
-                engine, board, time_limit, game_id, pvs, debug=debug
-            )
+            move = await get_engine_move(engine, board, time_limit, game_id, pvs, debug=debug)
             print(f" My move: {board.san(move)}")
         board.push(move)
 
@@ -261,9 +244,7 @@ async def main():
     elif args.nodes:
         limit = chess.engine.Limit(nodes=args.nodes)
     else:
-        limit = chess.engine.Limit(
-            white_clock=30, black_clock=30, white_inc=1, black_inc=1
-        )
+        limit = chess.engine.Limit(white_clock=30, black_clock=30, white_inc=1, black_inc=1)
 
     try:
         await play(

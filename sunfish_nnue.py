@@ -9,7 +9,7 @@ from contextlib import contextmanager
 
 print = partial(print, flush=True)
 
-version = 'sunfish nnue'
+version = "sunfish nnue"
 
 ###############################################################################
 # A small neural network to evaluate positions
@@ -26,7 +26,7 @@ pad = np.pad(nn[0].reshape(8, 8, 6)[::-1], ((2, 2), (1, 1), (0, 0))).reshape(120
 pst = np.einsum("sd,odp->pso", pad, nn[1].reshape(L0, 6, 6))
 pst = np.einsum("psd,odc->cpso", pst, nn[3].reshape(L0, L0, 2))
 pst = dict(zip("PNBRQKpnbrqk", pst.reshape(12, 120, L0)))
-pst["."] = [[0]*L0] * 120
+pst["."] = [[0] * L0] * 120
 
 # for i, p in enumerate("PNBRQKpnbrqk"):
 #     table = pst[p][:, 0].reshape(12,10)[2:10,1:9]
@@ -39,13 +39,13 @@ pst["."] = [[0]*L0] * 120
 MATE = 100000
 # Since move ordering uses the lower-case version, we need to include the
 # mate score in it, since otherwise we wouldn't find checks in QS search.
-pst['K'][:, 0] += MATE//2
-pst['k'][:, 0] -= MATE//2
+pst["K"][:, 0] += MATE // 2
+pst["k"][:, 0] -= MATE // 2
 MATE_LOWER = MATE // 2
-MATE_UPPER = MATE * 3//2
+MATE_UPPER = MATE * 3 // 2
 
 
-#def manual_wf(board):
+# def manual_wf(board):
 #    wf = 0
 #    for i, p in enumerate(board):
 #        col = p.isupper()
@@ -61,11 +61,13 @@ MATE_UPPER = MATE * 3//2
 #            wf += emb
 #    return wf
 
+
 def features(board):
     wf = sum(pst[p][i] for i, p in enumerate(board) if p.isalpha())
-    #assert np.allclose(wf, manual_wf(board))
+    # assert np.allclose(wf, manual_wf(board))
     bf = sum(pst[p.swapcase()][119 - i] for i, p in enumerate(board) if p.isalpha())
     return wf, bf
+
 
 ###############################################################################
 # Global constants
@@ -93,7 +95,8 @@ initial = (
 N, E, S, W = -10, 1, 10, -1
 directions = {
     "P": (N, N + N, N + W, N + E),
-    "N": (N + N + E,
+    "N": (
+        N + N + E,
         E + N + E,
         E + S + E,
         S + S + E,
@@ -113,7 +116,7 @@ EVAL_ROUGHNESS = 13
 
 # minifier-hide start
 opt_ranges = dict(
-    EVAL_ROUGHNESS = (0, 50),
+    EVAL_ROUGHNESS=(0, 50),
 )
 # minifier-hide end
 
@@ -161,9 +164,7 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
                         # If the pawn captures, it has to either be a piece, an
                         # enpassant square, or a moving king.
                         if (
-                            d in (N + W, N + E)
-                            and q == "."
-                            and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
+                            d in (N + W, N + E) and q == "." and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
                             # and j != self.ep and abs(j - self.kp) >= 2
                         ):
                             break
@@ -191,7 +192,11 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         # A nullmove is nearly a rotate, but it always clear enpassant.
         pos = Position(
             self.board[::-1].swapcase(),
-            0, self.bf, self.wf, self.bc, self.wc,
+            0,
+            self.bf,
+            self.wf,
+            self.bc,
+            self.wc,
             0 if nullmove or not self.ep else 119 - self.ep,
             0 if nullmove or not self.kp else 119 - self.kp,
         )
@@ -222,20 +227,24 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         self.put(i, ".", stack)
 
         # Castling rights, we move the rook or capture the opponent's
-        if i == A1: self.wc=(False, self.wc[1])
-        if i == H1: self.wc=(self.wc[0], False)
-        if j == A8: self.bc=(self.bc[0], False)
-        if j == H8: self.bc=(False, self.bc[1])
+        if i == A1:
+            self.wc = (False, self.wc[1])
+        if i == H1:
+            self.wc = (self.wc[0], False)
+        if j == A8:
+            self.bc = (self.bc[0], False)
+        if j == H8:
+            self.bc = (False, self.bc[1])
 
         # Capture the moving king. Actually we get an extra free king. Same thing.
         if abs(j - self.kp) < 2:
-            self.put(self.board.find('k'), ' ')
+            self.put(self.board.find("k"), " ")
 
         # Castling
         if p == "K":
-            self.wc=(False, False)
+            self.wc = (False, False)
             if abs(j - i) == 2:
-                self.kp=(i + j) // 2
+                self.kp = (i + j) // 2
                 self.put(A1 if j < i else H1, ".", stack)
                 self.put((i + j) // 2, "R", stack)
 
@@ -270,16 +279,16 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         return self.board[move.j] != "." or abs(move.j - self.kp) < 2 or move.prom
 
     def compute_value(self):
-        #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
+        # relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
         # TODO: We can maybe speed this up using a fixed `out` array,
         # as well as using .dot istead of @.
         act = np.tanh
         wf, bf = self.wf, self.bf
         # Pytorch matrices are in the shape (out_features, in_features)
-        #hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
-        hidden = (layer1[:,:9] @ act(wf[1:])) + (layer1[:,9:] @ act(bf[1:]))
+        # hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
+        hidden = (layer1[:, :9] @ act(wf[1:])) + (layer1[:, 9:] @ act(bf[1:]))
         score = layer2 @ act(hidden)
-        #if verbose:
+        # if verbose:
         #    print(f"Score: {score + model['scale'] * (wf[0] - bf[0])}")
         #    print(f"from model: {score}, pieces: {wf[0]-bf[0]}")
         #    print(f"{wf=}")
@@ -330,9 +339,7 @@ class MutablePosition(namedtuple("Position", "board score wf bf wc bc ep kp")):
                         # If the pawn captures, it has to either be a piece, an
                         # enpassant square, or a moving king.
                         if (
-                            d in (N + W, N + E)
-                            and q == "."
-                            and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
+                            d in (N + W, N + E) and q == "." and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
                             # and j != self.ep and abs(j - self.kp) >= 2
                         ):
                             break
@@ -359,7 +366,11 @@ class MutablePosition(namedtuple("Position", "board score wf bf wc bc ep kp")):
         # A nullmove is nearly a rotate, but it always clear enpassant.
         pos = Position(
             self.board[::-1].swapcase(),
-            0, self.bf, self.wf, self.bc, self.wc,
+            0,
+            self.bf,
+            self.wf,
+            self.bc,
+            self.wc,
             0 if nullmove or not self.ep else 119 - self.ep,
             0 if nullmove or not self.kp else 119 - self.kp,
         )
@@ -388,10 +399,14 @@ class MutablePosition(namedtuple("Position", "board score wf bf wc bc ep kp")):
         #     pos = pos._replace(castl=pos.castle - {j})
 
         # Castling rights, we move the rook or capture the opponent's
-        if i == A1: pos = pos._replace(wc=(False, pos.wc[1]))
-        if i == H1: pos = pos._replace(wc=(pos.wc[0], False))
-        if j == A8: pos = pos._replace(bc=(pos.bc[0], False))
-        if j == H8: pos = pos._replace(bc=(False, pos.bc[1]))
+        if i == A1:
+            pos = pos._replace(wc=(False, pos.wc[1]))
+        if i == H1:
+            pos = pos._replace(wc=(pos.wc[0], False))
+        if j == A8:
+            pos = pos._replace(bc=(pos.bc[0], False))
+        if j == H8:
+            pos = pos._replace(bc=(False, pos.bc[1]))
         # Capture the moving king. Actually we get an extra free king. Same thing.
         if abs(j - self.kp) < 2:
             pos = put(pos, self.kp, "K")
@@ -437,16 +452,16 @@ class MutablePosition(namedtuple("Position", "board score wf bf wc bc ep kp")):
         return self.board[move.j] != "." or abs(move.j - self.kp) < 2 or move.prom
 
     def compute_value(self):
-        #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
+        # relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
         # TODO: We can maybe speed this up using a fixed `out` array,
         # as well as using .dot istead of @.
         act = np.tanh
         wf, bf = self.wf, self.bf
         # Pytorch matrices are in the shape (out_features, in_features)
-        #hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
-        hidden = (layer1[:,:9] @ act(wf[1:])) + (layer1[:,9:] @ act(bf[1:]))
+        # hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
+        hidden = (layer1[:, :9] @ act(wf[1:])) + (layer1[:, 9:] @ act(bf[1:]))
         score = layer2 @ act(hidden)
-        #if verbose:
+        # if verbose:
         #    print(f"Score: {score + model['scale'] * (wf[0] - bf[0])}")
         #    print(f"from model: {score}, pieces: {wf[0]-bf[0]}")
         #    print(f"{wf=}")
@@ -505,9 +520,7 @@ class Searcher:
         # with the same parameters, it will always fail in the same direction (hi / low).
         # It might return different soft values though, exactly because the tp tables
         # have changed.
-        entry = self.tp_score.get(
-            (pos.hash(), depth, root), Entry(-MATE_UPPER, MATE_UPPER)
-        )
+        entry = self.tp_score.get((pos.hash(), depth, root), Entry(-MATE_UPPER, MATE_UPPER))
         if entry.lower >= gamma:
             return entry.lower
         if entry.upper < gamma:
@@ -530,32 +543,34 @@ class Searcher:
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
             if depth > 2 and not root and any(c in pos.board for c in "NBRQ"):
-                yield None, -self.bound(pos.rotate(nullmove=True), 1-gamma, depth-3, False)
+                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
                 yield None, pos.score
+
             # Then killer move. We search it twice, but the tp will fix things for us.
             # Note, we don't have to check for legality, since we've already done it
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
             def mvv_lva(move):
                 # Recall mvv_lva gives the _negative_ score
-                if abs(move.j - pos.kp) < 2: return -MATE
+                if abs(move.j - pos.kp) < 2:
+                    return -MATE
                 i, j = move.i, move.j
                 p, q = pos.board[i], pos.board[j]
                 p2 = move.prom or p
                 score = pst[q][j][0] - (pst[p2][j][0] - pst[p][i][0])
                 pp, qq, pp2 = p.swapcase(), q.swapcase(), p2.swapcase()
-                score -= pst[qq][119-j][0] - (pst[pp2][119-j][0] - pst[pp][119-i][0])
-                #pp, qq = p.swapcase(), q.swapcase()
-                #score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
-                #score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
+                score -= pst[qq][119 - j][0] - (pst[pp2][119 - j][0] - pst[pp][119 - i][0])
+                # pp, qq = p.swapcase(), q.swapcase()
+                # score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
+                # score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
                 return score
 
             killer = self.tp_move.get(pos.hash())
             if killer and (depth > 0 or pos.is_capture(killer)):
-                yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, False)
+                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1, False)
 
             # Then all the other moves
             # moves = [(move, pos.move(move)) for move in pos.gen_moves()]
@@ -569,7 +584,7 @@ class Searcher:
             # with the queen shouldn't usually be our first option...
             # It could be fun to train a network too, that scores all the from/too target
             # squares, say, and uses that to sort...
-            #for move, pos1 in sorted(moves, key=lambda move_pos: move_pos[1].score):
+            # for move, pos1 in sorted(moves, key=lambda move_pos: move_pos[1].score):
             for move in sorted(pos.gen_moves(), key=mvv_lva):
                 # TODO: We seem to have some issues with our QS search, which eventually
                 # leads to very large jumps in search time. (Maybe we get the classical
@@ -579,12 +594,12 @@ class Searcher:
                 # See https://home.hccnet.nl/h.g.muller/mvv.html for inspiration
                 # If depth is 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
-                #if depth > 0 or -pos1.score-pos.score >= QS_LIMIT:
+                # if depth > 0 or -pos1.score-pos.score >= QS_LIMIT:
                 if depth > 0 or pos.is_capture(move):
-                #print(mvv_lva(move)*360)
-                #if -mvv_lva(move)*360 >= 30  - depth * 10:
-                #if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(move)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(move) >= QS_LIMIT/360):
-                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1, False)
+                    # print(mvv_lva(move)*360)
+                    # if -mvv_lva(move)*360 >= 30  - depth * 10:
+                    # if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(move)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(move) >= QS_LIMIT/360):
+                    yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1, False)
 
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
@@ -604,9 +619,7 @@ class Searcher:
             best = -MATE_LOWER if in_check else 0
 
         # Table part 2
-        self.tp_score[pos.hash(), depth, root] = (
-            Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
-        )
+        self.tp_score[pos.hash(), depth, root] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
 
         return best
 
@@ -625,7 +638,7 @@ class Searcher:
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply.
         for depth in range(1, 1000):
-            #yield depth, None, 0, "cp"
+            # yield depth, None, 0, "cp"
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but play tests show a margin of 20 plays
@@ -662,15 +675,18 @@ searcher = Searcher()
 
 
 # minifier-hide start
-if '--profile' in sys.argv:
+if "--profile" in sys.argv:
     import cProfile
+
     def go_depth_5():
         for depth, _, _, _ in searcher.search(hist):
             if depth == 5:
                 break
-    cProfile.run('go_depth_5()')
+
+    cProfile.run("go_depth_5()")
 else:
     import tools.uci
+
     tools.uci.run(sys.modules[__name__], hist[-1])
 sys.exit()
 # minifier-hide end
@@ -716,4 +732,4 @@ while True:
             if move_str and time.time() - start > think * 0.8:
                 break
 
-        print("bestmove", move_str or '(none)')
+        print("bestmove", move_str or "(none)")

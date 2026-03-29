@@ -22,7 +22,6 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 
-
 def render_move(move, white_pov):
     if move is None:
         return "(none)"
@@ -41,10 +40,10 @@ def parse_move(move_str, white_pov):
         i, j = sunfish.flip_coord(i), sunfish.flip_coord(j)
     return (i, j, prom)
 
+
 def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False, callbackMove=None, top_n=10, ignore_squares=[]):
     # Lazy import to break circular dependency (engine.py imports from tools/uci.py)
-    from engine import (run_iterative_deepening, get_filtered_legal_moves,
-                        score_moves, select_best_move)
+    from engine import run_iterative_deepening, get_filtered_legal_moves, score_moves, select_best_move
 
     if debug:
         logger.debug(f"Going movetime={max_movetime}, depth={max_depth}, top_n={top_n}, ignore_squares={ignore_squares}")
@@ -53,9 +52,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
     white_pov = len(hist) % 2 == 1
 
     # 1 - Iterative deepening search
-    final_depth = run_iterative_deepening(
-        searcher, hist, max_depth, max_movetime, stop_event=stop_event
-    )
+    final_depth = run_iterative_deepening(searcher, hist, max_depth, max_movetime, stop_event=stop_event)
 
     # 2 - Legal moves (with ignore_squares filtering)
     legal_moves = get_filtered_legal_moves(pos, white_pov, ignore_squares)
@@ -64,9 +61,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
         return
 
     # 3 - Score and rank moves
-    scored_moves, _ = score_moves(
-        searcher, pos, legal_moves, white_pov, final_depth, top_n
-    )
+    scored_moves, _ = score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n)
 
     # 4 - PV extraction + score refinement for fast path
     my_pv = pv(searcher, pos, include_scores=True)
@@ -96,6 +91,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=8, debug=False
             print("bestmove", bestmove_str, "depth", final_depth, flush=True)
     else:
         print("bestmove (none)", flush=True)
+
 
 def mate_loop(
     searcher,
@@ -174,7 +170,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
     debug = False
     hist = [startpos]
     searcher = sunfish.Searcher()
-        
+
     with ThreadPoolExecutor(max_workers=1) as executor:
         # Noop future to get started
         go_future = executor.submit(lambda: None)
@@ -210,9 +206,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                     print(f"id name {sunfish.version}")
                     for attr, (lo, hi) in sunfish.opt_ranges.items():
                         default = getattr(sunfish, attr)
-                        print(
-                            f"option name {attr} type spin default {default} min {lo} max {hi}"
-                        )
+                        print(f"option name {attr} type spin default {default} min {lo} max {hi}")
                     print("uciok")
 
                 elif args[0] == "setoption":
@@ -238,7 +232,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                     pos = from_fen(*args[2:8])
                     # For white FEN, keep the board as is;
                     # for black, initialize history with two entries so that moves alternate properly.
-                    if args[3] == 'b':
+                    if args[3] == "b":
                         hist = [pos.rotate(), pos]
                     else:
                         hist = [pos]
@@ -258,7 +252,6 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
 
                 # New function : get moves
                 elif args[0] == "getmoves":
-
                     # Example: getmoves e2 P
                     if len(args) < 2:
                         print("info string getmoves requires a square (and optional piece type)")
@@ -272,7 +265,6 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                     print("legal moves:", " ".join(moves_uci), flush=True)
 
                 elif args[0] == "go":
-
                     think = 10**6
                     max_depth = 8
                     loop = go_loop
@@ -324,7 +316,7 @@ def run(sunfish_module, startpos, callbackPos=None, callbackMove=None):
                             ignore_squares = [sq.strip() for sq in ignore_str.split(",")]
                             logger.debug(f"Ignoring squares: {ignore_squares}")
 
-                    setattr(searcher, 'precision', float(precision))
+                    setattr(searcher, "precision", float(precision))
 
                     do_stop_event.clear()
                     if loop is go_loop:
@@ -379,7 +371,7 @@ def from_fen(board, color, castling, enpas, _hclock, _fclock):
     wc = ("Q" in castling, "K" in castling)
     bc = ("k" in castling, "q" in castling)
     ep = sunfish.parse(enpas) if enpas != "-" else 0
-    if hasattr(sunfish, 'features'):
+    if hasattr(sunfish, "features"):
         wf, bf = sunfish.features(board)
         pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)
         pos = pos._replace(score=pos.calculate_score())
@@ -387,7 +379,7 @@ def from_fen(board, color, castling, enpas, _hclock, _fclock):
         score = sum(sunfish.pst[c][i] for i, c in enumerate(board) if c.isupper())
         score -= sum(sunfish.pst[c.upper()][sunfish.flip_coord(i)] for i, c in enumerate(board) if c.islower())
         pos = sunfish.Position(board, score, wc, bc, ep, 0)
-    return pos if color == 'w' else pos.rotate()
+    return pos if color == "w" else pos.rotate()
 
 
 def get_color(pos):
@@ -398,9 +390,9 @@ def get_color(pos):
 def can_kill_king(pos):
     # If we just checked for opponent moves capturing the king, we would miss
     # captures in case of illegal castling.
-    #MATE_LOWER = 60_000 - 10 * 929
-    #return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-    return any(pos.board[m[1]] == 'k' or abs(m[1] - pos.kp) < 2 for m in pos.gen_moves())
+    # MATE_LOWER = 60_000 - 10 * 929
+    # return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+    return any(pos.board[m[1]] == "k" or abs(m[1] - pos.kp) < 2 for m in pos.gen_moves())
 
 
 def pv(searcher, pos, include_scores=True, include_loop=False):

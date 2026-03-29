@@ -28,7 +28,7 @@ def session_run():
 
         moves.append(data["move"])
         times.append(elapsed)
-        print(f"  Move {i+1}: {data['move']} ({elapsed:.3f}s)", flush=True)
+        print(f"  Move {i + 1}: {data['move']} ({elapsed:.3f}s)", flush=True)
 
         if data.get("game_over"):
             print(f"  Game over: {data['game_over']}")
@@ -49,24 +49,30 @@ def stateless_run(moves):
 
             # Replay moves 0..i-1 to reach the position before move i
             for prev_move in moves[:i]:
-                r = requests.post(f"{BASE_URL}/move", json={
-                    "session_id": sid,
-                    "move": prev_move,
-                })
+                r = requests.post(
+                    f"{BASE_URL}/move",
+                    json={
+                        "session_id": sid,
+                        "move": prev_move,
+                    },
+                )
                 r.raise_for_status()
 
             # Now search from this position with a cold TP — time this call only
-            r = requests.post(f"{BASE_URL}/bestmove", json={
-                "session_id": sid,
-                "maxdepth": MAXDEPTH,
-            })
+            r = requests.post(
+                f"{BASE_URL}/bestmove",
+                json={
+                    "session_id": sid,
+                    "maxdepth": MAXDEPTH,
+                },
+            )
             r.raise_for_status()
             elapsed = r.elapsed.total_seconds()
             times.append(elapsed)
-            print(f"  Move {i+1}: {elapsed:.3f}s", flush=True)
+            print(f"  Move {i + 1}: {elapsed:.3f}s", flush=True)
         except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
-            print(f"  Move {i+1}: FAILED ({e.__class__.__name__})")
-            print(f"  Server disconnected — stopping stateless run at move {i+1}")
+            print(f"  Move {i + 1}: FAILED ({e.__class__.__name__})")
+            print(f"  Server disconnected — stopping stateless run at move {i + 1}")
             break
 
     return times
@@ -81,29 +87,29 @@ def print_results(session_times, stateless_times):
     session_total = sum(session_times[:n])
     stateless_total = sum(stateless_times[:n])
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SESSION vs STATELESS BENCHMARK")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"Depth: {MAXDEPTH} | Moves: {n} | Starting position: standard")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"")
     print(f"{'Move':<6}{'Session (s)':<14}{'Stateless (s)':<16}{'Delta (s)':<12}{'Speedup':<10}")
-    print(f"{'-'*70}")
+    print(f"{'-' * 70}")
 
     for i in range(n):
         s = session_times[i]
         st = stateless_times[i]
         delta = st - s
-        speedup = st / s if s > 0 else float('inf')
+        speedup = st / s if s > 0 else float("inf")
         speedup_str = f"{speedup:.2f}x"
-        print(f"{i+1:<6}{s:<14.3f}{st:<16.3f}{delta:<+12.3f}{speedup_str:<10}")
+        print(f"{i + 1:<6}{s:<14.3f}{st:<16.3f}{delta:<+12.3f}{speedup_str:<10}")
 
-    print(f"{'-'*70}")
+    print(f"{'-' * 70}")
     total_delta = stateless_total - session_total
-    total_speedup = stateless_total / session_total if session_total > 0 else float('inf')
+    total_speedup = stateless_total / session_total if session_total > 0 else float("inf")
     total_speedup_str = f"{total_speedup:.2f}x"
     print(f"{'Total':<6}{session_total:<14.3f}{stateless_total:<16.3f}{total_delta:<+12.3f}{total_speedup_str:<10}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
 
 def main():

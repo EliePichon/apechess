@@ -12,23 +12,18 @@ print("Testing Italian Opening with different movetimes...")
 print(f"FEN: {ITALIAN_FEN}\n")
 
 for movetime_ms in [2000, 4000, 7000, 10000]:
-    print(f"\n{'='*60}")
-    print(f"Testing movetime={movetime_ms}ms ({movetime_ms/1000}s)")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print(f"Testing movetime={movetime_ms}ms ({movetime_ms / 1000}s)")
+    print(f"{'=' * 60}")
 
-    payload = {
-        "fen": ITALIAN_FEN,
-        "movetime": movetime_ms,
-        "maxdepth": 25,
-        "precision": 0.0
-    }
+    payload = {"fen": ITALIAN_FEN, "movetime": movetime_ms, "maxdepth": 25, "precision": 0.0}
 
     start = time.time()
     try:
         response = requests.post(
             f"{BASE_URL}/bestmove",
             json=payload,
-            timeout=20  # Long timeout to see actual behavior
+            timeout=20,  # Long timeout to see actual behavior
         )
         elapsed = time.time() - start
 

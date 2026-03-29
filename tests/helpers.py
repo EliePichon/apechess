@@ -23,6 +23,7 @@ ITALIAN_FEN = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3
 # Session helper
 # ---------------------------------------------------------------------------
 
+
 def create_session(fen=None):
     """Create a new game session, optionally from a FEN position."""
     body = {"fen": fen} if fen else {}
@@ -34,6 +35,7 @@ def create_session(fen=None):
 # ---------------------------------------------------------------------------
 # Test tracker
 # ---------------------------------------------------------------------------
+
 
 class TestTracker:
     """Lightweight pass/fail counter for integration tests."""

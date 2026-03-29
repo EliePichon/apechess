@@ -9,18 +9,19 @@ import time
 
 from helpers import BASE_URL
 
+
 def test_bestmove_top_n(fen, top_n, description):
     """Test the bestmove endpoint with different top_n values."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Test: {description}")
     print(f"FEN: {fen}")
     print(f"top_n: {top_n}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     payload = {
         "fen": fen,
         "maxdepth": 6,  # Use lower depth for faster testing
-        "top_n": top_n
+        "top_n": top_n,
     }
 
     start_time = time.time()
@@ -34,15 +35,16 @@ def test_bestmove_top_n(fen, top_n, description):
         print(f"  Score: {data.get('score')}")
         print(f"  Check: {data.get('check')}")
         print(f"  All moves ({len(data.get('allmoves', []))}):")
-        for i, (move, score) in enumerate(data.get('allmoves', [])[:10], 1):
+        for i, (move, score) in enumerate(data.get("allmoves", [])[:10], 1):
             print(f"    {i}. {move}: {score}")
-        if len(data.get('allmoves', [])) > 10:
+        if len(data.get("allmoves", [])) > 10:
             print(f"    ... and {len(data.get('allmoves', [])) - 10} more")
-        return elapsed, len(data.get('allmoves', []))
+        return elapsed, len(data.get("allmoves", []))
     else:
         print(f"✗ Error: {response.status_code}")
         print(f"  {response.text}")
         return None, None
+
 
 def main():
     print("Testing top_n parameter implementation")
@@ -82,11 +84,11 @@ def main():
 
     # Print summary
     if results:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("SUMMARY")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"{'Configuration':<15} {'Time (s)':<12} {'Moves returned':<15}")
-        print(f"{'-'*60}")
+        print(f"{'-' * 60}")
         for config, elapsed, num_moves in results:
             print(f"{config:<15} {elapsed:<12.2f} {num_moves:<15}")
 
@@ -96,6 +98,7 @@ def main():
             time_10 = results[2][1]
             overhead = ((time_10 - time_1) / time_1) * 100
             print(f"\nOverhead for top_n=10 vs top_n=1: {overhead:.1f}%")
+
 
 if __name__ == "__main__":
     try:

@@ -37,11 +37,14 @@ def run(base_url, depth):
         print(f"  {name}...", end=" ", flush=True)
         t0 = time.perf_counter()
 
-        r = requests.post(f"{base_url}/bestmove", json={
-            "fen": fen,
-            "maxdepth": depth,
-            "top_n": TOP_N,
-        })
+        r = requests.post(
+            f"{base_url}/bestmove",
+            json={
+                "fen": fen,
+                "maxdepth": depth,
+                "top_n": TOP_N,
+            },
+        )
         r.raise_for_status()
         data = r.json()
 

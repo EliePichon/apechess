@@ -13,9 +13,11 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+
 @app.errorhandler(EngineError)
 def handle_engine_error(error):
     return jsonify({"error": error.message}), error.status_code
+
 
 def validate_fen(fen):
     """Return a 400 error response if FEN is invalid, or None if OK."""
@@ -24,9 +26,11 @@ def validate_fen(fen):
         return jsonify({"error": "Invalid FEN string"}), 400
     return None
 
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
+
 
 @app.route("/getmoves", methods=["POST"])
 def get_moves_endpoint():
@@ -54,6 +58,7 @@ def get_moves_endpoint():
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/bestmove", methods=["POST"])
 def bestmove_endpoint():
@@ -115,6 +120,7 @@ def bestmove_endpoint():
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route("/ischeck", methods=["POST"])
 def is_check_endpoint():
     """
@@ -137,6 +143,7 @@ def is_check_endpoint():
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/newgame", methods=["POST"])
 def new_game_endpoint():
