@@ -13,6 +13,7 @@ Sunfish is a simple but strong chess engine written in Python. This fork wraps i
 - **Clutchness** — Measures how critical a move is (eval gap between best and second-best move)
 - **Move Grading** — Per-move accuracy scoring against the engine's best line
 - **MTD-bi Search** — With Piece Square Tables, transposition tables, and null-move pruning
+- **C Extension** — Hot paths (gen_moves, value, move, rotate) in C for ~5x speedup over pure Python
 
 ## Quick Start
 
@@ -34,6 +35,7 @@ See [API.md](API.md) for full endpoint documentation.
 | `engine.py` | Python API wrapping sunfish, session management |
 | `server.py` | Flask REST API |
 | `tools/uci.py` | UCI protocol layer (CLI use) |
+| `csrc/_sunfish_core.c` | C extension — hot path acceleration (~650 lines) |
 
 ## Development
 
@@ -45,7 +47,17 @@ make profile       # Generate flame graph (profiles/flame.svg)
 make help          # Show all available commands
 ```
 
-Hot-reload is enabled — code changes are picked up automatically without restarting the server.
+Hot-reload is enabled — code changes to Python files are picked up automatically without restarting the server. Changes to `csrc/` require rebuilding the C extension (`pip install -e .` locally, or `make down && make up` for Docker).
+
+### Building the C extension locally
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install setuptools && pip install -e .
+python -c "import sunfish; print(sunfish._USING_C_EXTENSION)"  # True
+```
+
+The engine falls back to pure Python automatically if the extension isn't built. Set `SUNFISH_NO_C=1` to force the fallback.
 
 ## Attribution
 

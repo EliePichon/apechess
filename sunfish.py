@@ -869,7 +869,15 @@ class Searcher:
                 yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
 
             # Then all the other moves
-            if self._perf:
+            if _USING_C_EXTENSION and _precision == 0.0:
+                if self._perf:
+                    _t0 = perf_counter()
+                    _scored = pos.score_and_sort_moves()
+                    self.gen_moves_time += perf_counter() - _t0
+                    self.gen_moves_calls += 1
+                else:
+                    _scored = pos.score_and_sort_moves()
+            elif self._perf:
                 _t0 = perf_counter()
                 _scored = sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)
                 self.gen_moves_time += perf_counter() - _t0
@@ -994,11 +1002,38 @@ if os.environ.get("SUNFISH_NO_C") != "1":
         import _sunfish_core
 
         _py_gen_moves = Position.gen_moves
+        _py_value = Position.value
 
         def _c_gen_moves(self):
             return _sunfish_core.gen_moves(self.board, self.wc, self.bc, self.ep, self.kp)
 
+        def _c_value(self, move):
+            score = _sunfish_core.value(self.board, self.ep, self.kp, move[0], move[1], move[2])
+            if _precision > 0.0:
+                factor = random.uniform(1 - _precision, 1 + _precision)
+                score = int(score * factor)
+            return score
+
+        def _c_score_and_sort(self):
+            return _sunfish_core.score_and_sort_moves(self.board, self.wc, self.bc, self.ep, self.kp)
+
+        _py_rotate = Position.rotate
+        _py_move = Position.move
+
+        def _c_rotate(self, nullmove=False):
+            return Position(*_sunfish_core.rotate(
+                self.board, self.score, self.wc, self.bc, self.ep, self.kp, nullmove))
+
+        def _c_move(self, move):
+            return Position(*_sunfish_core.move_and_rotate(
+                self.board, self.score, self.wc, self.bc, self.ep, self.kp,
+                move[0], move[1], move[2]))
+
         Position.gen_moves = _c_gen_moves
+        Position.value = _c_value
+        Position.score_and_sort_moves = _c_score_and_sort
+        Position.rotate = _c_rotate
+        Position.move = _c_move
         _USING_C_EXTENSION = True
     except ImportError:
         pass

@@ -181,6 +181,204 @@ def test_many_captures():
     assert ok, f"Many captures: {detail}"
 
 
+# --- Phase 2: value() and score_and_sort_moves() tests ---
+
+
+def compare_value(fen, label=""):
+    """Compare C and Python value() for all moves in a FEN position."""
+    parts = fen.split()
+    pos = uci.from_fen(*parts)
+    py_gen = py_gen_moves if callable(py_gen_moves) else sunfish.Position.gen_moves
+    moves = list(py_gen(pos))
+
+    py_value = sunfish._py_value if hasattr(sunfish, "_py_value") else sunfish.Position.value
+
+    for move in moves:
+        pv = py_value(pos, move)
+        cv = _sunfish_core.value(pos.board, pos.ep, pos.kp, move[0], move[1], move[2])
+        if pv != cv:
+            return False, f"move={move}, Python={pv}, C={cv}"
+    return True, f"{len(moves)} moves"
+
+
+def compare_score_and_sort(fen, label=""):
+    """Compare C score_and_sort_moves vs Python sorted(value, gen_moves)."""
+    parts = fen.split()
+    pos = uci.from_fen(*parts)
+    py_gen = py_gen_moves if callable(py_gen_moves) else sunfish.Position.gen_moves
+    py_val = sunfish._py_value if hasattr(sunfish, "_py_value") else sunfish.Position.value
+
+    moves = list(py_gen(pos))
+    py_scored = sorted(((py_val(pos, m), m) for m in moves), reverse=True)
+    c_scored = _sunfish_core.score_and_sort_moves(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)
+
+    if py_scored == c_scored:
+        return True, f"{len(moves)} moves"
+
+    detail = f"len: Python={len(py_scored)}, C={len(c_scored)}"
+    for i, (p, c) in enumerate(zip(py_scored, c_scored)):
+        if p != c:
+            detail += f" | First diff at {i}: Python={p}, C={c}"
+            break
+    return False, detail
+
+
+def test_value_starting():
+    ok, detail = compare_value("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    assert ok, f"value starting: {detail}"
+
+
+def test_value_midgame():
+    ok, detail = compare_value("r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7")
+    assert ok, f"value midgame: {detail}"
+
+
+def test_value_castling():
+    ok, detail = compare_value("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+    assert ok, f"value castling: {detail}"
+
+
+def test_value_en_passant():
+    ok, detail = compare_value("rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 3")
+    assert ok, f"value en passant: {detail}"
+
+
+def test_value_promotion():
+    ok, detail = compare_value("8/P7/8/8/8/8/8/K6k w - - 0 1")
+    assert ok, f"value promotion: {detail}"
+
+
+def test_value_endgame():
+    ok, detail = compare_value("8/5pk1/6p1/8/3R4/6PP/5PK1/2r5 w - - 0 36")
+    assert ok, f"value endgame: {detail}"
+
+
+def test_score_and_sort_starting():
+    ok, detail = compare_score_and_sort("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    assert ok, f"score_and_sort starting: {detail}"
+
+
+def test_score_and_sort_midgame():
+    ok, detail = compare_score_and_sort("r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7")
+    assert ok, f"score_and_sort midgame: {detail}"
+
+
+def test_score_and_sort_castling():
+    ok, detail = compare_score_and_sort("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+    assert ok, f"score_and_sort castling: {detail}"
+
+
+def test_score_and_sort_promotion():
+    ok, detail = compare_score_and_sort("8/P7/8/8/8/8/8/K6k w - - 0 1")
+    assert ok, f"score_and_sort promotion: {detail}"
+
+
+def test_score_and_sort_captures():
+    ok, detail = compare_score_and_sort("r1b1k1nr/ppppqppp/2n5/4p3/1bB1P3/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 5")
+    assert ok, f"score_and_sort captures: {detail}"
+
+
+def test_score_and_sort_black_to_move():
+    ok, detail = compare_score_and_sort("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+    assert ok, f"score_and_sort black to move: {detail}"
+
+
+# --- Phase 3: move() and rotate() tests ---
+
+
+def compare_move(fen, label=""):
+    """Compare C and Python move() for all moves in a FEN position."""
+    parts = fen.split()
+    pos = uci.from_fen(*parts)
+    py_gen = py_gen_moves if callable(py_gen_moves) else sunfish.Position.gen_moves
+    py_move_fn = sunfish._py_move if hasattr(sunfish, "_py_move") else sunfish.Position.move
+    moves = list(py_gen(pos))
+
+    for move in moves:
+        py_moved = py_move_fn(pos, move)
+        c_result = _sunfish_core.move_and_rotate(
+            pos.board, pos.score, pos.wc, pos.bc, pos.ep, pos.kp,
+            move[0], move[1], move[2])
+        c_moved = sunfish.Position(*c_result)
+        if py_moved != c_moved:
+            detail = f"move={move}"
+            for f in ["board", "score", "wc", "bc", "ep", "kp"]:
+                pv, cv = getattr(py_moved, f), getattr(c_moved, f)
+                if pv != cv:
+                    detail += f", {f}: Py={repr(pv)[:40]}, C={repr(cv)[:40]}"
+            return False, detail
+    return True, f"{len(moves)} moves"
+
+
+def compare_rotate(fen, nullmove=False, label=""):
+    """Compare C and Python rotate() for a position."""
+    parts = fen.split()
+    pos = uci.from_fen(*parts)
+    py_rotate_fn = sunfish._py_rotate if hasattr(sunfish, "_py_rotate") else sunfish.Position.rotate
+    py_rot = py_rotate_fn(pos, nullmove=nullmove)
+    c_result = _sunfish_core.rotate(
+        pos.board, pos.score, pos.wc, pos.bc, pos.ep, pos.kp, nullmove)
+    c_rot = sunfish.Position(*c_result)
+    if py_rot == c_rot:
+        return True, "match"
+    detail = ""
+    for f in ["board", "score", "wc", "bc", "ep", "kp"]:
+        pv, cv = getattr(py_rot, f), getattr(c_rot, f)
+        if pv != cv:
+            detail += f"{f}: Py={repr(pv)[:40]}, C={repr(cv)[:40]}; "
+    return False, detail
+
+
+def test_move_starting():
+    ok, detail = compare_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    assert ok, f"move starting: {detail}"
+
+
+def test_move_castling():
+    ok, detail = compare_move("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+    assert ok, f"move castling: {detail}"
+
+
+def test_move_en_passant():
+    ok, detail = compare_move("rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 3")
+    assert ok, f"move en passant: {detail}"
+
+
+def test_move_promotion():
+    ok, detail = compare_move("8/P7/8/8/8/8/8/K6k w - - 0 1")
+    assert ok, f"move promotion: {detail}"
+
+
+def test_move_midgame():
+    ok, detail = compare_move("r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7")
+    assert ok, f"move midgame: {detail}"
+
+
+def test_move_black_to_move():
+    ok, detail = compare_move("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+    assert ok, f"move black to move: {detail}"
+
+
+def test_move_rocks():
+    ok, detail = compare_move("8/8/8/3O4/2C5/8/8/K6k w - - 0 1")
+    assert ok, f"move rocks: {detail}"
+
+
+def test_rotate_starting():
+    ok, detail = compare_rotate("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    assert ok, f"rotate starting: {detail}"
+
+
+def test_rotate_with_ep():
+    ok, detail = compare_rotate("rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 3")
+    assert ok, f"rotate with ep: {detail}"
+
+
+def test_rotate_nullmove():
+    ok, detail = compare_rotate("rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 3", nullmove=True)
+    assert ok, f"rotate nullmove: {detail}"
+
+
 if __name__ == "__main__":
     import pytest
 

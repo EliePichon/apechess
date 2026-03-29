@@ -8,6 +8,7 @@ Fork of Sunfish chess engine, exposed as a REST API (Flask, port 5500).
 - `engine.py` — Clean Python API wrapping sunfish directly.
 - `server.py` — Flask REST API calling engine.py. Supports both stateless mode and session-based stateful mode.
 - `tools/uci.py` — UCI protocol layer (used for CLI, not by server). `from_fen()` takes 6 args, not a FEN string. Needs `uci.sunfish = sunfish` before use.
+- `csrc/_sunfish_core.c` — C extension accelerating hot paths (gen_moves, value, move, rotate). See **C Extension** section below.
 
 ## Board Representation
 
@@ -146,6 +147,12 @@ make logs                   # View server logs
 Tests are integration tests in `tests/` hitting HTTP endpoints inside Docker.
 Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_performance.py`.
 
+C extension tests run locally (no Docker needed):
+```bash
+python -m pytest tests/test_c_extension.py -v    # 52 correctness tests (gen_moves, value, sort, move, rotate)
+python -m pytest tests/test_node_invariance.py -v # Node count parity: C vs Python across 6 positions
+```
+
 ### Benchmarking
 
 ```bash
@@ -167,14 +174,22 @@ Reports NPS (nodes/sec) and per-position timing. Node counts must stay identical
 ## Dev Setup
 
 ```bash
+# Docker (recommended — builds C extension automatically)
 make up                     # Docker dev server on localhost:5500 (hot-reload enabled)
 make down                   # Stop
-python server.py            # Direct (after pip install -r requirements.txt)
+
+# Local (requires building C extension first)
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip install setuptools && pip install -e .   # Build C extension
+python server.py
 ```
 
 **Hot-reload**: Code changes to `server.py`, `engine.py`, `sunfish.py`, and `tools/` are picked up automatically via volume mounts + Flask debug mode. No restart needed.
 
-**When to rebuild**: Only run `make down && make up` after changing `requirements.txt` or `Dockerfile.local`. Never need `docker-compose build --no-cache` for code changes.
+**When to rebuild Docker**: Run `make down && make up` after changing `requirements.txt`, `Dockerfile.local`, or `csrc/` files.
+
+**When to rebuild C extension locally**: Run `pip install -e .` after any change to `csrc/` files. Not needed for Python-only changes.
 
 **Host binding**: Flask defaults to `0.0.0.0` (accepts Docker port-mapped traffic). Override with `FLASK_HOST=127.0.0.1` for production.
 
@@ -187,3 +202,78 @@ make profile-record DURATION=30  # Raw py-spy recording for N seconds
 ```
 
 Set `SUNFISH_PERF=1` in `docker-compose.yml` to enable fine-grained counters in `Searcher` (gen_moves timing). Then `GET /session/stats` includes `gen_moves_calls`, `gen_moves_time_ms`, `nodes`, and `last_search` timing breakdown.
+
+## C Extension (`_sunfish_core`)
+
+A C extension module accelerates the engine's hot paths for a **5x speedup** (22K → 121K NPS). The engine falls back to pure Python if the extension is unavailable.
+
+### What's in C
+
+| Function | C implementation | What it does |
+|----------|-----------------|--------------|
+| `gen_moves()` | `gen_moves_internal()` | Move generation over the 120-char board |
+| `value()` | `value_internal()` | PST-based move scoring |
+| `score_and_sort_moves()` | gen_moves + value + qsort | Combined hot line in `bound()` — eliminates Python generator, per-move round-trips, and Python sort |
+| `move()` | `move_and_rotate()` | Board manipulation + rotate in one pass on a mutable `char[120]` buffer |
+| `rotate()` | `rotate_internal()` | Reverse + swapcase via lookup table |
+
+### File layout
+
+```
+csrc/
+  _sunfish_core.c     # All C functions (~650 lines)
+  _sunfish_core.h     # Lookup tables (IS_UPPER, IS_PAWN, IS_POWERED, etc.), direction arrays, constants
+  tables.h            # Generated PST arrays — do not edit, regenerate with scripts/gen_tables.py
+setup.py              # setuptools Extension config
+scripts/gen_tables.py # Reads sunfish.py PST dicts → emits csrc/tables.h
+```
+
+### Building
+
+```bash
+# Local development (requires a venv with setuptools)
+python -m venv .venv && source .venv/bin/activate
+pip install setuptools
+pip install -e .                     # Builds _sunfish_core.so in-place
+
+# Docker (handled automatically)
+make down && make up                 # Dockerfile.local runs pip install -e .
+
+# Verify
+python -c "import sunfish; print(sunfish._USING_C_EXTENSION)"  # Should print True
+```
+
+**When to rebuild**: After any change to `csrc/` files. Code changes to `sunfish.py`, `engine.py`, `server.py` do NOT require a rebuild (hot-reload still works).
+
+**Regenerating PST tables**: If you change `piece` values or `pst` tables in `sunfish.py`, regenerate the C header:
+```bash
+python scripts/gen_tables.py > csrc/tables.h
+pip install -e .    # rebuild
+```
+
+### Fallback
+
+- `SUNFISH_NO_C=1` env var forces pure Python (useful for debugging or benchmarking baseline).
+- If `_sunfish_core` can't be imported (not built, wrong platform), the engine works identically in pure Python.
+- `sunfish._USING_C_EXTENSION` (bool) reports which path is active. Benchmark script prints this automatically.
+
+### Correctness invariants
+
+- **Node count invariance**: C and Python must produce identical node counts at all depths. This is enforced by `tests/test_node_invariance.py`.
+- **Move ordering parity**: `gen_moves()` must yield moves in identical order (same board iteration, same direction order, same promotion piece order). Tie-breaking in sort affects TP table → different node counts if order diverges.
+- **Precision bypass**: When `_precision > 0` (randomized play), `score_and_sort_moves()` is skipped and the Python sorting path is used (C doesn't call into Python's `random` module).
+
+### Modifying piece logic
+
+When adding new piece types or changing move rules, you must update BOTH:
+1. Python: `sunfish.py` (gen_moves, value, move, rotate)
+2. C: `csrc/_sunfish_core.c` (gen_moves_internal, value_internal, move_and_rotate) + `csrc/_sunfish_core.h` (lookup tables)
+
+Run `python -m pytest tests/test_c_extension.py tests/test_node_invariance.py` to verify parity.
+
+### Cross-compilation (mobile/desktop)
+
+The extension compiles to ~50-100KB. Target platforms:
+- **Android**: Chaquopy + NDK cross-compilation
+- **iOS**: Python-Apple-support ARM64
+- **macOS/Linux/Windows**: Standard `pip install .`
