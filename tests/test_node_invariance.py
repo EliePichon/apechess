@@ -40,6 +40,7 @@ POSITIONS = [
     ("midgame_tense", "r2qkb1r/pp2pppp/2n2n2/3p1b2/3P4/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 4 6"),
     ("endgame_rook", "8/5pk1/6p1/8/3R4/6PP/5PK1/2r5 w - - 0 36"),
     ("endgame_queen", "6k1/5ppp/8/8/8/8/5PPP/3Q2K1 w - - 0 40"),
+    ("ninja_knight_rocks", "4k3/8/8/8/3O4/1O6/8/J3K3 w - - 0 1"),
 ]
 
 DEPTH = 6
@@ -92,6 +93,12 @@ def test_node_invariance_endgame_queen():
     py = _search_nodes(POSITIONS[5][1], py_gen_moves, DEPTH)
     c = _search_nodes(POSITIONS[5][1], _c_gen_moves, DEPTH)
     assert py == c, f"endgame_queen: Python={py}, C={c}"
+
+
+def test_node_invariance_ninja_knight_rocks():
+    py = _search_nodes(POSITIONS[6][1], py_gen_moves, DEPTH)
+    c = _search_nodes(POSITIONS[6][1], _c_gen_moves, DEPTH)
+    assert py == c, f"ninja_knight_rocks: Python={py}, C={c}"
 
 
 if __name__ == "__main__":

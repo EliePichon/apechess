@@ -23,7 +23,7 @@ import sunfish
 PIECE_ORDER = ["P", "N", "B", "R", "Q", "K", "O"]
 PIECE_CHARS = {
     "P": 0, "A": 0,  # pawns share index
-    "N": 1, "C": 1,  # knights
+    "N": 1, "C": 1, "J": 1,  # knights (including Ninja Knight)
     "B": 2, "D": 2,  # bishops
     "R": 3, "T": 3,  # rooks
     "Q": 4, "X": 4,  # queens

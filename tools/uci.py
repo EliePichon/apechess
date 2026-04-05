@@ -34,7 +34,11 @@ def render_move(move, white_pov):
 
 def parse_move(move_str, white_pov):
     parse = sunfish.parse
-    i, j, prom = parse(move_str[:2]), parse(move_str[2:4]), move_str[4:].upper()
+    if len(move_str) > 5:
+        # Multi-hop Ninja Knight move (6+ chars): origin is first 2, dest is last 2
+        i, j, prom = parse(move_str[:2]), parse(move_str[-2:]), ""
+    else:
+        i, j, prom = parse(move_str[:2]), parse(move_str[2:4]), move_str[4:].upper()
     logger.debug(f"Parsed move {move_str} to {i}, {j}, {prom}")
     if not white_pov:
         i, j = sunfish.flip_coord(i), sunfish.flip_coord(j)

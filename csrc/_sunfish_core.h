@@ -78,7 +78,7 @@ static const unsigned char IS_ROCK[128] = {
 };
 
 static const unsigned char IS_NON_SLIDER[128] = {
-    ['P'] = 1, ['N'] = 1, ['K'] = 1, ['A'] = 1, ['C'] = 1, ['Y'] = 1,
+    ['P'] = 1, ['N'] = 1, ['K'] = 1, ['A'] = 1, ['C'] = 1, ['Y'] = 1, ['J'] = 1,
 };
 
 /* Get directions and count for a piece character.
@@ -87,7 +87,7 @@ static inline void get_directions(char p, const int **dirs, int *ndirs) {
     switch (p) {
         case 'P': case 'A':
             *dirs = PAWN_DIRS; *ndirs = PAWN_NDIRS; break;
-        case 'N': case 'C':
+        case 'N': case 'C': case 'J':
             *dirs = KNIGHT_DIRS; *ndirs = KNIGHT_NDIRS; break;
         case 'B': case 'D':
             *dirs = BISHOP_DIRS; *ndirs = BISHOP_NDIRS; break;

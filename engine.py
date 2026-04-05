@@ -6,6 +6,7 @@ import time
 import uuid
 import logging
 import threading
+from collections import deque
 
 import sunfish
 import tools.uci as uci
@@ -16,6 +17,74 @@ from tools.uci import from_fen, can_kill_king, render_move, parse_move, pv
 uci.sunfish = sunfish
 
 logger = logging.getLogger(__name__)
+
+
+def _reconstruct_bounce_path(board, origin, dest):
+    """Find a valid bounce path from origin to dest through rocks for a Ninja Knight.
+
+    Returns list of board indices: [origin, rock1, rock2, ..., dest].
+    If dest is a direct knight-hop from origin, returns [origin, dest].
+    Uses BFS to find shortest path.
+    """
+    knight_dirs = sunfish.directions["N"]
+    queue = deque([(origin, [origin])])
+    visited = {origin}
+
+    while queue:
+        sq, path = queue.popleft()
+        for d in knight_dirs:
+            next_sq = sq + d
+            if next_sq in visited:
+                continue
+            q = board[next_sq]
+            if q.isspace():
+                continue
+            if next_sq == dest:
+                return path + [dest]
+            if q in sunfish.ROCKS:
+                visited.add(next_sq)
+                queue.append((next_sq, path + [next_sq]))
+
+    return [origin, dest]
+
+
+def _expand_ninja_move(board, move_str, white_pov):
+    """Expand a 4-char J move string to a multi-char path string if it's a bounce.
+
+    If the piece at origin is a Ninja Knight and the move requires bouncing through
+    rocks, returns the expanded path string (e.g., "b1d2f3"). Otherwise returns
+    the original move_str unchanged.
+
+    Already-expanded moves (6+ chars) are returned as-is.
+    """
+    if len(move_str) > 5:
+        return move_str  # Already expanded (multi-hop ninja knight path)
+
+    origin_str = move_str[:2]
+    dest_str = move_str[2:4]
+
+    if white_pov:
+        origin_idx = sunfish.parse(origin_str)
+    else:
+        origin_idx = sunfish.flip_coord(sunfish.parse(origin_str))
+
+    p = board[origin_idx]
+    if p != "J":
+        return move_str
+
+    if white_pov:
+        dest_idx = sunfish.parse(dest_str)
+    else:
+        dest_idx = sunfish.flip_coord(sunfish.parse(dest_str))
+
+    path = _reconstruct_bounce_path(board, origin_idx, dest_idx)
+    if len(path) <= 2:
+        return move_str  # Direct hop, no expansion needed
+
+    if white_pov:
+        return "".join(sunfish.render(sq) for sq in path)
+    else:
+        return "".join(sunfish.render(sunfish.flip_coord(sq)) for sq in path)
 
 
 # ---------------------------------------------------------------------------
@@ -222,21 +291,28 @@ def _get_legal_moves_from_pos(pos, white_pov):
 
     Returns dict: {square_str: [move_str, ...]}
     """
-    player_pieces = frozenset("PNBRQKACDTXY")
+    player_pieces = frozenset("PNBRQKACDTXYJ")
     moves = {}
-    for i, piece in enumerate(pos.board):
-        if piece in player_pieces:
+    for i, piece_char in enumerate(pos.board):
+        if piece_char in player_pieces:
             legal = pos.get_legal_moves(square=i)
             if legal:
                 if white_pov:
                     sq = sunfish.render(i)
-                    move_strs = [sunfish.render(m[0]) + sunfish.render(m[1]) + m[2].lower() for m in legal]
+                    move_strs = []
+                    for m in legal:
+                        base = sunfish.render(m[0]) + sunfish.render(m[1]) + m[2].lower()
+                        if piece_char == "J":
+                            base = _expand_ninja_move(pos.board, base, white_pov)
+                        move_strs.append(base)
                 else:
                     sq = sunfish.render(sunfish.flip_coord(i))
-                    move_strs = [
-                        sunfish.render(sunfish.flip_coord(m[0])) + sunfish.render(sunfish.flip_coord(m[1])) + m[2].lower()
-                        for m in legal
-                    ]
+                    move_strs = []
+                    for m in legal:
+                        base = sunfish.render(sunfish.flip_coord(m[0])) + sunfish.render(sunfish.flip_coord(m[1])) + m[2].lower()
+                        if piece_char == "J":
+                            base = _expand_ninja_move(pos.board, base, white_pov)
+                        move_strs.append(base)
                 moves[sq] = move_strs
     return moves
 
@@ -383,9 +459,11 @@ def score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
         best_move_obj = searcher.tp_move.get(pos)
         if best_move_obj and best_move_obj in legal_moves:
             move_str = render_move(best_move_obj, white_pov)
+            move_str = _expand_ninja_move(pos.board, move_str, white_pov)
             scored_moves = [(move_str, 0)]
         elif legal_moves:
             move_str = render_move(legal_moves[0], white_pov)
+            move_str = _expand_ninja_move(pos.board, move_str, white_pov)
             scored_moves = [(move_str, 0)]
     else:
         # STANDARD PATH: multi-move evaluation using TT + shallow search
@@ -395,6 +473,7 @@ def score_moves(searcher, pos, legal_moves, white_pov, final_depth, top_n):
         for m in legal_moves:
             new_pos = pos.move(m)
             move_str = render_move(m, white_pov)
+            move_str = _expand_ninja_move(pos.board, move_str, white_pov)
             score = tt_lookup(searcher, new_pos, final_depth)
             if score is None:
                 score = pos.value(m)
@@ -481,6 +560,8 @@ def _search_best_moves(searcher, hist, max_movetime, max_depth, top_n, ignore_sq
     if not bestmove_str:
         return {"bestmove": "(none)", "scored_moves": [], "depth_reached": final_depth}
 
+    bestmove_str = _expand_ninja_move(pos.board, bestmove_str, white_pov)
+
     perf = {
         "search_ms": round(t_search * 1000, 1),
         "legal_moves_ms": round(t_legal * 1000, 1),
@@ -509,13 +590,19 @@ def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"
     else:
         effective_side = "b" if (num_moves % 2 == 0) else "w"
 
-    if effective_side == "b":
-        move_from = sunfish.flip_coord(sunfish.parse(bestmove[:2]))
-        move_to = sunfish.flip_coord(sunfish.parse(bestmove[2:4]))
+    if len(bestmove) > 5:
+        # Multi-hop Ninja Knight move: origin is first 2, dest is last 2
+        origin_str, dest_str, promo = bestmove[:2], bestmove[-2:], ""
     else:
-        move_from = sunfish.parse(bestmove[:2])
-        move_to = sunfish.parse(bestmove[2:4])
-    promo = bestmove[4:].upper() if len(bestmove) > 4 else ""
+        origin_str, dest_str = bestmove[:2], bestmove[2:4]
+        promo = bestmove[4:].upper() if len(bestmove) > 4 else ""
+
+    if effective_side == "b":
+        move_from = sunfish.flip_coord(sunfish.parse(origin_str))
+        move_to = sunfish.flip_coord(sunfish.parse(dest_str))
+    else:
+        move_from = sunfish.parse(origin_str)
+        move_to = sunfish.parse(dest_str)
 
     new_position = position.move((move_from, move_to, promo))
     return can_kill_king(new_position.rotate())
@@ -624,7 +711,7 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None, s
     check = can_kill_king(pos.rotate())
 
     # Build response grouped by source square
-    player_pieces = frozenset("PNBRQKACDTXY")
+    player_pieces = frozenset("PNBRQKACDTXYJ")
     moves_by_square = {}
     all_evals = []
 
@@ -635,6 +722,7 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None, s
         else:
             src = sunfish.render(sunfish.flip_coord(m[0]))
             move_str = sunfish.render(sunfish.flip_coord(m[0])) + sunfish.render(sunfish.flip_coord(m[1])) + m[2].lower()
+        move_str = _expand_ninja_move(pos.board, move_str, white_pov)
 
         if src not in moves_by_square:
             moves_by_square[src] = []
@@ -770,7 +858,7 @@ def computer_turn(
             game_over = _detect_game_over(hist[-1])
             return {"move": None, "eval": None, "check": False, "game_over": game_over, "ply": len(session.hist)}
 
-        best_move_str = result["bestmove"]
+        best_move_str = result["bestmove"]  # Already API-ready (ninja moves expanded by _search_best_moves)
         best_eval = result["scored_moves"][0][1] if result.get("scored_moves") else 0
 
         # 2. Apply the move to the session

@@ -1,6 +1,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <stdlib.h>
+#include <string.h>
 #include "_sunfish_core.h"
 #include "tables.h"
 
@@ -53,6 +54,47 @@ static int gen_moves_internal(
             continue;
 
         get_directions(p, &dirs, &ndirs);
+
+        /* Ninja Knight: DFS bounce through rocks */
+        if (p == 'J') {
+            unsigned char visited[BOARD_SIZE];
+            int stack[BOARD_SIZE];
+            int sp = 0;
+            int si, dest;
+            char dq;
+
+            memset(visited, 0, BOARD_SIZE);
+            visited[i] = 1;
+            stack[sp++] = i;
+
+            while (sp > 0) {
+                int sq = stack[--sp];
+                for (si = 0; si < KNIGHT_NDIRS; si++) {
+                    dest = sq + KNIGHT_DIRS[si];
+                    if (dest < 0 || dest >= BOARD_SIZE)
+                        continue;
+                    if (visited[dest])
+                        continue;
+                    dq = board[dest];
+                    if (IS_SPACE[(unsigned char)dq])
+                        continue;
+                    if (IS_ROCK[(unsigned char)dq]) {
+                        visited[dest] = 1;
+                        stack[sp++] = dest;
+                    } else if (dq == '.' || (IS_LOWER[(unsigned char)dq] && dq != 'o')) {
+                        visited[dest] = 1;
+                        if (count < max_moves) {
+                            moves[count].i = i;
+                            moves[count].j = dest;
+                            moves[count].prom = '\0';
+                            count++;
+                        }
+                    }
+                    /* Friendly pieces (uppercase, non-rock) are skipped */
+                }
+            }
+            continue;
+        }
 
         for (di = 0; di < ndirs; di++) {
             int d = dirs[di];

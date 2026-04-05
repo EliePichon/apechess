@@ -125,7 +125,7 @@ Computer plays a turn. Searches for the best move, applies it to the session, de
 | `move` | The move the engine chose and applied. `null` if no legal moves. |
 | `eval` | Score of the chosen move in centipawns |
 | `check` | Whether the move gives check |
-| `game_over` | `null`, `"checkmate"`, or `"stalemate"` — detected server-side |
+| `game_over` | `null`, `"checkmate"`, `"stalemate"`, or `"king_captured"` — detected server-side |
 | `ply` | Number of positions in the session history (for tracking move number) |
 | `next` | Only present when `peek_next: true` and `game_over` is `null` |
 | `next.legal_moves` | Legal moves for the next side to move (grouped by source square) |
@@ -160,7 +160,7 @@ Apply a move to a session. Supports two modes:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `session_id` | string | Yes | — | Session to apply the move to |
-| `move` | string | Yes | — | Move in coordinate notation (e.g. `"e2e4"`, `"e7e8q"` for promotion) |
+| `move` | string | Yes | — | Move in coordinate notation (e.g. `"e2e4"`, `"e7e8q"` for promotion, `"b1c3e4"` for Ninja Knight bounce) |
 | `grade` | bool | No | `false` | Evaluate how good the player's move was vs the best move |
 | `grade_maxdepth` | int | No | `8` | Search depth for grading |
 | `peek_next` | bool | No | `false` | Pre-compute next position's legal moves + clutchness |
@@ -447,6 +447,59 @@ Moves use coordinate notation: source square + destination square + optional pro
 | `g1f3` | Knight from g1 to f3 |
 | `e7e8q` | Pawn promotes to queen |
 | `e1g1` | King-side castling |
+| `b1c3e4` | Ninja Knight bounce: b1 → c3 (rock) → e4 |
+| `a1b3d4f5` | Ninja Knight double bounce: a1 → b3 (rock) → d4 (rock) → f5 |
+
+**Ninja Knight parkour moves** use a multi-square path format: `<origin><sq1>[<sq2>]...` where each segment is 2 characters. Length 4 = direct hop, length 6+ = parkour bounce through rocks. Intermediate squares are always rocks. The engine returns these expanded paths on all endpoints (`/getmoves`, `/turn`, `/move`, `/bestmove`, `/evalmoves`). When submitting a parkour move via `/move`, send the full path string.
+
+### Custom Piece Types in FEN
+
+The engine supports custom piece types beyond standard chess. Include their FEN characters in positions sent to `/newgame`, `/getmoves`, `/bestmove`, etc.
+
+| Piece | White | Black | Behavior |
+|-------|-------|-------|----------|
+| Rock | `O` | `o` | Immovable obstacle. Blocks all pieces except knights (which jump over). |
+| Powered Pawn | `A` | `a` | Pawn that can land on rocks (destroying them). Promotes to `C`/`D`/`T`/`X`. |
+| Powered Knight | `C` | `c` | Knight that can land on rocks (destroying them). |
+| Powered Bishop | `D` | `d` | Bishop that can land on rocks (stops there, destroys the rock). |
+| Powered Rook | `T` | `t` | Rook that can land on rocks (stops there, destroys the rock). |
+| Powered Queen | `X` | `x` | Queen that can land on rocks (stops there, destroys the rock). |
+| Powered King | `Y` | `y` | King that can land on rocks (destroying them). |
+| Ninja Knight | `J` | `j` | Knight that bounces off rocks via chained knight-hops. Rocks are **not** destroyed. See [Ninja Knight](#ninja-knight). |
+
+**Example FEN with Ninja Knights and rocks:**
+```
+rnbqkbnr/pppppppp/8/3O4/5O2/8/PPPPPPPP/RJBQKBJR w KQkq - 0 1
+```
+
+### Ninja Knight
+
+The Ninja Knight (`J`/`j`) moves like a normal knight but can "bounce" off rocks. When a knight-hop lands on a rock (`O`/`o`), it must immediately make another knight-hop from that rock. The chain continues until the final destination is an empty square or a capturable enemy piece. Rocks remain intact after bouncing.
+
+**Rules:**
+- Direct knight hops to empty/enemy squares work normally (4-char move strings)
+- Landing on a rock triggers a mandatory bounce — the knight cannot stop on a rock
+- Captures only happen at the final destination, never on intermediate rocks
+- The knight cannot revisit any square during a bounce chain (no cycles)
+- Bounce chain length is unlimited (naturally capped by board geometry)
+
+**API behavior:**
+- `/getmoves` returns multi-char path strings for bounce moves (e.g., `"b1c3e4"`)
+- `/turn` returns the full bounce path when the CPU plays a Ninja Knight parkour
+- `/move` accepts multi-char path strings as input
+- `/bestmove` and `/evalmoves` return expanded paths for Ninja Knight moves
+
+**Example `/getmoves` response:**
+```json
+{
+  "moves": {
+    "b1": ["b1a3", "b1c3d5", "b1c3e4", "b1c3a2"],
+    "e1": ["e1d1", "e1f1"]
+  },
+  "check": false
+}
+```
+Here `"b1a3"` is a direct hop (4 chars) and `"b1c3d5"` is a single bounce through the rock on c3 (6 chars).
 
 ### Eval Scores
 

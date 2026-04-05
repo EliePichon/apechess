@@ -60,6 +60,33 @@ Variants of standard pieces that can **land on rocks**, destroying them. Encoded
 - `engine.py`: player_pieces includes `ACDTXY`
 - Tests: `tests/test_rock_landing.py`
 
+### Ninja Knight (`J`/`j`)
+
+An upgraded Knight that can "bounce" off rocks via chained knight-hops. When a knight-hop lands on a rock, it must immediately make another knight-hop from that rock. The chain continues until reaching an empty square or capturable enemy piece. Rocks are **not destroyed** by bouncing.
+
+- `J` = White Ninja Knight, `j` = Black Ninja Knight. Regular Knights remain `N`/`n`.
+- Moves like a normal knight when no rocks are adjacent.
+- Same piece value (280) and PST as Knight.
+- **Not** a powered piece — separate piece type, not in `POWERED_TO_BASE`.
+- Cycle prevention: visited squares cannot be revisited during a bounce chain.
+- `NINJA_KNIGHTS = frozenset("J")` for identity checks.
+- Non-slider set: `"PNKACYJ"` (includes J).
+- `engine.py`: `player_pieces` includes `J`.
+
+**API move format**: Bounce moves use multi-char path strings. Pattern: `<origin><sq1>[<sq2>]...` where each segment is 2 chars.
+- Direct hop: `"b1c3"` (4 chars, same as normal knight)
+- Single bounce: `"b1d2f3"` (6 chars: B1 → D2 rock → F3)
+- Double bounce: `"b1d2f3e5"` (8 chars: B1 → D2 rock → F3 rock → E5)
+- `parse_move` handles 6+ char moves (origin = first 2, dest = last 2)
+
+**Implementation touchpoints**:
+- `sunfish.py`: `piece`, `pst`, `directions` dicts, `NON_SLIDERS`, `NINJA_KNIGHTS`, `_ninja_knight_dests()` DFS method, `gen_moves()` branch for `p == "J"`
+- `engine.py`: `player_pieces`, `_reconstruct_bounce_path()` BFS for API output, `_expand_ninja_move()` at API boundaries
+- `tools/uci.py`: `parse_move` handles multi-hop strings
+- `csrc/_sunfish_core.h`: `IS_NON_SLIDER`, `IS_NINJA_KNIGHT`, `get_directions` includes J
+- `csrc/_sunfish_core.c`: DFS bounce logic in `gen_moves_internal`
+- Tests: `tests/test_ninja_knight.py`, C extension tests in `tests/test_c_extension.py`
+
 ## REST API
 
 Supports two modes: **stateless** (send FEN each request) and **session-based** (backend holds position).
@@ -130,8 +157,8 @@ Eval gap between the best and 2nd-best move — measures how critical the turn i
 - **Moves are plain tuples** `(i, j, prom)`, not namedtuples. Access via indexing (`move[0]`, `move[1]`, `move[2]`) or unpacking (`i, j, prom = move`). Do NOT use `.i`, `.j`, `.prom` attribute access.
 - Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0
 - Pawn logic uses `p in "PA"`, king logic uses `p in "KY"` to include powered variants
-- Non-slider stop set: `"PNKACY"`
-- `engine.py` player_pieces includes `ACDTXY`
+- Non-slider stop set: `"PNKACYJ"` (includes Ninja Knight)
+- `engine.py` player_pieces includes `ACDTXYJ`
 - **Precision** is a module-level variable `sunfish._precision` (set by engine.py before search, default 0.0). Do not set it on the Searcher instance.
 
 ## Testing
@@ -146,12 +173,12 @@ make logs                   # View server logs
 ```
 
 Tests are integration tests in `tests/` hitting HTTP endpoints inside Docker.
-Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_king_capture.py`, `test_performance.py`.
+Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_king_capture.py`, `test_performance.py`, `test_ninja_knight.py`.
 
 C extension tests run locally (no Docker needed):
 ```bash
-python -m pytest tests/test_c_extension.py -v    # 52 correctness tests (gen_moves, value, sort, move, rotate)
-python -m pytest tests/test_node_invariance.py -v # Node count parity: C vs Python across 6 positions
+python -m pytest tests/test_c_extension.py -v    # 53 correctness tests (gen_moves, value, sort, move, rotate, ninja knight)
+python -m pytest tests/test_node_invariance.py -v # Node count parity: C vs Python across 7 positions
 ```
 
 ### Benchmarking

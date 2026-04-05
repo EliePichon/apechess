@@ -42,6 +42,7 @@ piece = {
     "T": 479,
     "X": 929,
     "Y": 60000,
+    "J": 280,
 }
 pst = {
     "P": (
@@ -520,6 +521,9 @@ POWERED_PIECES = frozenset("ACDTXY")
 for powered, base in POWERED_TO_BASE.items():
     pst[powered] = pst[base]
 
+# Ninja Knight shares PST with normal Knight
+pst["J"] = pst["N"]
+
 ###############################################################################
 # Global constants
 ###############################################################################
@@ -567,16 +571,18 @@ directions = {
     "Q": (N, E, S, W, N + E, S + E, S + W, N + W),
     "K": (N, E, S, W, N + E, S + E, S + W, N + W),
     "O": (),  # Rocks don't move
+    "J": (N + N + E, E + N + E, E + S + E, S + S + E, S + S + W, W + S + W, W + N + W, N + N + W),
 }
 # Powered pieces share directions with their base pieces
 for _powered, _base in POWERED_TO_BASE.items():
     directions[_powered] = directions[_base]
 
 # Frozensets for O(1) piece-identity checks in hot paths
-NON_SLIDERS = frozenset("PNKACY")
+NON_SLIDERS = frozenset("PNKACYJ")
 PAWNS = frozenset("PA")
 KINGS = frozenset("KY")
 ROCKS = frozenset("Oo")
+NINJA_KNIGHTS = frozenset("J")
 PROMOTION_PIECES = {"A": "CDTX", "P": "NBRQ"}
 
 # Module-level precision for randomized play (set by engine.py before search)
@@ -628,12 +634,45 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
     kp - the king passant square
     """
 
+    def _ninja_knight_dests(self, origin):
+        """Generate all reachable final destinations for a Ninja Knight at origin.
+
+        Uses DFS through knight hops. Intermediate squares must be rocks (O/o).
+        Final destinations must be empty or capturable enemy pieces (lowercase, not 'o').
+        Tracks visited squares to prevent cycles.
+        """
+        knight_dirs = directions["N"]
+        visited = {origin}
+        stack = [origin]
+        results = []
+        while stack:
+            sq = stack.pop()
+            for d in knight_dirs:
+                dest = sq + d
+                if dest in visited:
+                    continue
+                q = self.board[dest]
+                if q.isspace():
+                    continue
+                if q in ROCKS:
+                    visited.add(dest)
+                    stack.append(dest)
+                elif q == "." or (q.islower() and q != "o"):
+                    visited.add(dest)
+                    results.append(dest)
+                # else: friendly piece (uppercase) or 'o' without rock membership — skip
+        return results
+
     def gen_moves(self):
         # For each of our pieces, iterate through each possible 'ray' of moves,
         # as defined in the 'directions' map. The rays are broken e.g. by
         # captures or immediately in case of pieces such as knights.
         for i, p in enumerate(self.board):
             if not p.isupper() or p == "O":
+                continue
+            if p == "J":
+                for dest in self._ninja_knight_dests(i):
+                    yield (i, dest, "")
                 continue
             for d in directions[p]:
                 for j in count(i + d, d):

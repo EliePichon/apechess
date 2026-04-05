@@ -379,6 +379,51 @@ def test_rotate_nullmove():
     assert ok, f"rotate nullmove: {detail}"
 
 
+# --- Ninja Knight tests ---
+
+
+def test_ninja_knight_basic():
+    """Ninja Knight with no rocks moves like a normal knight."""
+    ok, detail = compare_gen_moves("8/8/8/8/4J3/8/8/4K3 w - - 0 1")
+    assert ok, f"Ninja Knight basic: {detail}"
+
+
+def test_ninja_knight_single_bounce():
+    """Ninja Knight bounces off a single rock."""
+    ok, detail = compare_gen_moves("4k3/8/8/8/8/2O5/8/1J2K3 w - - 0 1")
+    assert ok, f"Ninja Knight single bounce: {detail}"
+
+
+def test_ninja_knight_multi_bounce():
+    """Ninja Knight bounces through multiple rocks."""
+    ok, detail = compare_gen_moves("4k3/8/8/8/3O4/1O6/8/J3K3 w - - 0 1")
+    assert ok, f"Ninja Knight multi bounce: {detail}"
+
+
+def test_ninja_knight_with_pieces():
+    """Ninja Knight with various pieces on the board."""
+    ok, detail = compare_gen_moves("4k3/8/8/4p3/3O4/2O5/8/1J2K3 w - - 0 1")
+    assert ok, f"Ninja Knight with pieces: {detail}"
+
+
+def test_ninja_knight_cycle_rocks():
+    """Rocks in mutual knight-hop range don't cause issues."""
+    ok, detail = compare_gen_moves("8/8/8/O7/8/1O6/8/J3K3 w - - 0 1")
+    assert ok, f"Ninja Knight cycle rocks: {detail}"
+
+
+def test_ninja_knight_black():
+    """Black Ninja Knight after rotation."""
+    ok, detail = compare_gen_moves("4k3/8/8/4j3/8/3O4/8/4K3 b - - 0 1")
+    assert ok, f"Black Ninja Knight: {detail}"
+
+
+def test_ninja_knight_dense_rocks():
+    """Ninja Knight with many rocks on the board."""
+    ok, detail = compare_gen_moves("4k3/8/2O1O3/1O3O2/4J3/1O3O2/2O1O3/4K3 w - - 0 1")
+    assert ok, f"Ninja Knight dense rocks: {detail}"
+
+
 if __name__ == "__main__":
     import pytest
 
