@@ -42,7 +42,7 @@ piece = {
     "T": 479,
     "X": 929,
     "Y": 60000,
-    "J": 280,
+    "J": 550,
 }
 pst = {
     "P": (
@@ -521,8 +521,8 @@ POWERED_PIECES = frozenset("ACDTXY")
 for powered, base in POWERED_TO_BASE.items():
     pst[powered] = pst[base]
 
-# Ninja Knight shares PST with normal Knight
-pst["J"] = pst["N"]
+# Ninja Knight uses Knight's positional bonuses but with its own piece value
+pst["J"] = tuple(v - piece["N"] + piece["J"] for v in pst["N"])
 
 ###############################################################################
 # Global constants
@@ -756,6 +756,15 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 ep = i + N
             if j == self.ep:
                 board = _put(board, j + S, ".")
+        # Parkour activation: knight-type capture upgrades all N and C to J
+        # (score adjustment already handled by value() which is called above)
+        if p in ("N", "C") and q.islower() and q != "o":
+            # Upgrade the moved piece (already at j)
+            board = _put(board, j, "J")
+            # Upgrade all remaining N and C on the board
+            for sq in range(len(board)):
+                if board[sq] in ("N", "C"):
+                    board = _put(board, sq, "J")
         # We rotate the returned position, so it's ready for the next player
 
         return Position(board, score, wc, bc, ep, kp).rotate()
@@ -781,6 +790,15 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 score += pst[prom][j] - pst[p][j]
             if j == self.ep:
                 score += pst[p][119 - (j + S)]
+
+        # Parkour activation bonus: knight-type capture upgrades all N/C to J
+        if p in ("N", "C") and q.islower() and q != "o":
+            # Score upgrading the mover
+            score += pst["J"][j] - pst[p][j]
+            # Score upgrading all bystander N and C (excluding the mover at i)
+            for sq in range(len(self.board)):
+                if sq != i and self.board[sq] in ("N", "C"):
+                    score += pst["J"][sq] - pst[self.board[sq]][sq]
 
         # Then apply the random factor:
         if _precision > 0.0:

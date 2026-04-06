@@ -248,6 +248,21 @@ static int value_internal(
         }
     }
 
+    /* Parkour activation: knight-type capture upgrades all N/C to J */
+    if ((p == 'N' || p == 'C') && IS_LOWER[(unsigned char)q] && q != 'o') {
+        int ji = PIECE_INDEX[(unsigned char)'J'];
+        /* Score upgrading the mover */
+        score += PST[ji][mj] - PST[pi][mj];
+        /* Score upgrading all bystander N and C (excluding the mover at mi) */
+        int si;
+        for (si = 0; si < BOARD_SIZE; si++) {
+            if (si != mi && (board[si] == 'N' || board[si] == 'C')) {
+                int bpi = PIECE_INDEX[(unsigned char)board[si]];
+                score += PST[ji][si] - PST[bpi][si];
+            }
+        }
+    }
+
     return score;
 }
 
@@ -670,6 +685,19 @@ static PyObject *py_move_and_rotate(PyObject *self, PyObject *args) {
         }
         if (mj == ep) {
             buf[mj + DIR_S] = '.';
+        }
+    }
+
+    /* Parkour activation: knight-type capture upgrades all N/C to J */
+    if ((p == 'N' || p == 'C') && IS_LOWER[(unsigned char)board[mj]] && board[mj] != 'o') {
+        /* Upgrade the moved piece (already at mj in buf) */
+        buf[mj] = 'J';
+        /* Upgrade all remaining N and C on the board */
+        int si;
+        for (si = 0; si < BOARD_SIZE; si++) {
+            if (buf[si] == 'N' || buf[si] == 'C') {
+                buf[si] = 'J';
+            }
         }
     }
 

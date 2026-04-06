@@ -20,15 +20,16 @@ import sunfish
 
 
 # Piece index mapping: must match PIECE_INDEX in the generated header
-PIECE_ORDER = ["P", "N", "B", "R", "Q", "K", "O"]
+PIECE_ORDER = ["P", "N", "B", "R", "Q", "K", "O", "J"]
 PIECE_CHARS = {
     "P": 0, "A": 0,  # pawns share index
-    "N": 1, "C": 1, "J": 1,  # knights (including Ninja Knight)
+    "N": 1, "C": 1,  # knights
     "B": 2, "D": 2,  # bishops
     "R": 3, "T": 3,  # rooks
     "Q": 4, "X": 4,  # queens
     "K": 5, "Y": 5,  # kings
     "O": 6,           # rocks
+    "J": 7,           # ninja knight (own index, higher piece value than N)
 }
 
 
@@ -54,7 +55,7 @@ def main():
     print(fmt_array(piece_values, "PIECE_VALUE"))
     print()
 
-    # PST tables: 7 pieces x 120 positions
+    # PST tables: 8 pieces x 120 positions
     print("/* PST[piece_index][board_position] — padded 120-element tables */")
     print(f"static const int PST[{len(PIECE_ORDER)}][120] = {{")
     for pi, p in enumerate(PIECE_ORDER):

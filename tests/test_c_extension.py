@@ -424,6 +424,46 @@ def test_ninja_knight_dense_rocks():
     assert ok, f"Ninja Knight dense rocks: {detail}"
 
 
+# --- Parkour activation tests ---
+
+
+def test_parkour_value_knight_capture():
+    """value() includes parkour bonus when N captures."""
+    ok, detail = compare_value("rnbqkbnr/pppppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    assert ok, f"Parkour value knight capture: {detail}"
+
+
+def test_parkour_value_with_bystanders():
+    """value() parkour bonus accounts for multiple N/C pieces on the board."""
+    # Two knights + a powered knight, one can capture
+    ok, detail = compare_value("4k3/8/8/8/2p5/8/N1N5/4K1C1 w - - 0 1")
+    assert ok, f"Parkour value bystanders: {detail}"
+
+
+def test_parkour_move_knight_capture():
+    """move_and_rotate() upgrades all N to J after knight capture."""
+    ok, detail = compare_move("rnbqkbnr/pppppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    assert ok, f"Parkour move knight capture: {detail}"
+
+
+def test_parkour_move_powered_knight_capture():
+    """move_and_rotate() upgrades all N/C to J after powered knight (C) capture."""
+    ok, detail = compare_move("4k3/8/8/8/2p5/8/8/4K1CN w - - 0 1")
+    assert ok, f"Parkour move powered knight: {detail}"
+
+
+def test_parkour_move_no_activation_on_non_capture():
+    """N moving to empty square does not trigger parkour."""
+    ok, detail = compare_move("4k3/8/8/8/8/8/8/1N2K3 w - - 0 1")
+    assert ok, f"Parkour no activation non-capture: {detail}"
+
+
+def test_parkour_score_and_sort_with_capture():
+    """score_and_sort includes parkour bonus for knight captures."""
+    ok, detail = compare_score_and_sort("4k3/8/8/8/2p5/8/N1N5/4K3 w - - 0 1")
+    assert ok, f"Parkour score_and_sort: {detail}"
+
+
 if __name__ == "__main__":
     import pytest
 

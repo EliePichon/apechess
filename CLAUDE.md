@@ -66,12 +66,19 @@ An upgraded Knight that can "bounce" off rocks via chained knight-hops. When a k
 
 - `J` = White Ninja Knight, `j` = Black Ninja Knight. Regular Knights remain `N`/`n`.
 - Moves like a normal knight when no rocks are adjacent.
-- Same piece value (280) and PST as Knight.
+- Piece value: **550** (higher than Knight's 280, reflecting bounce mobility). Own PST index (7) in C extension.
 - **Not** a powered piece — separate piece type, not in `POWERED_TO_BASE`.
 - Cycle prevention: visited squares cannot be revisited during a bounce chain.
 - `NINJA_KNIGHTS = frozenset("J")` for identity checks.
 - Non-slider set: `"PNKACYJ"` (includes J).
 - `engine.py`: `player_pieces` includes `J`.
+
+**Parkour Activation**: When any Knight (`N`) or Powered Knight (`C`) makes a **capture**, ALL `N` and `C` pieces on the same side are upgraded to Ninja Knights (`J`). This is a one-time transformation — the board string encodes the activation state (no extra fields needed).
+- Trigger: `p in ("N", "C")` and target is a lowercase enemy piece (not `o`).
+- Board transformation happens in `Position.move()` (Python) and `move_and_rotate()` (C).
+- Score adjustment happens in `Position.value()` (Python) and `value_internal()` (C) — adds PST delta for mover + all bystander N/C pieces.
+- The engine values activation at +270 per piece upgraded (550 - 280), making knight captures strategically attractive.
+- After activation, `J` captures do NOT re-trigger (already upgraded).
 
 **API move format**: Bounce moves use multi-char path strings. Pattern: `<origin><sq1>[<sq2>]...` where each segment is 2 chars.
 - Direct hop: `"b1c3"` (4 chars, same as normal knight)
@@ -80,12 +87,13 @@ An upgraded Knight that can "bounce" off rocks via chained knight-hops. When a k
 - `parse_move` handles 6+ char moves (origin = first 2, dest = last 2)
 
 **Implementation touchpoints**:
-- `sunfish.py`: `piece`, `pst`, `directions` dicts, `NON_SLIDERS`, `NINJA_KNIGHTS`, `_ninja_knight_dests()` DFS method, `gen_moves()` branch for `p == "J"`
+- `sunfish.py`: `piece`, `pst`, `directions` dicts, `NON_SLIDERS`, `NINJA_KNIGHTS`, `_ninja_knight_dests()` DFS method, `gen_moves()` branch for `p == "J"`, parkour activation in `move()` and `value()`
 - `engine.py`: `player_pieces`, `_reconstruct_bounce_path()` BFS for API output, `_expand_ninja_move()` at API boundaries
 - `tools/uci.py`: `parse_move` handles multi-hop strings
 - `csrc/_sunfish_core.h`: `IS_NON_SLIDER`, `IS_NINJA_KNIGHT`, `get_directions` includes J
-- `csrc/_sunfish_core.c`: DFS bounce logic in `gen_moves_internal`
-- Tests: `tests/test_ninja_knight.py`, C extension tests in `tests/test_c_extension.py`
+- `csrc/_sunfish_core.c`: DFS bounce logic in `gen_moves_internal`, parkour activation in `value_internal()` and `move_and_rotate()`
+- `scripts/gen_tables.py`: J has own PST index (7), separate from N (1)
+- Tests: `tests/test_ninja_knight.py`, parkour tests in `tests/test_c_extension.py`
 
 ## REST API
 
@@ -155,7 +163,7 @@ Eval gap between the best and 2nd-best move — measures how critical the turn i
 - Game over: `_detect_game_over(pos)` returns `"king_captured"`, `"checkmate"`, `"stalemate"`, or `None`. King capture is checked first (missing `K`/`Y` in board). Occurs in modified-rule scenarios (e.g., double turns) where a king ends up capturable.
 - Move application: `Position.move(m)` returns new position (rotated for opponent)
 - **Moves are plain tuples** `(i, j, prom)`, not namedtuples. Access via indexing (`move[0]`, `move[1]`, `move[2]`) or unpacking (`i, j, prom = move`). Do NOT use `.i`, `.j`, `.prom` attribute access.
-- Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0
+- Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0, J=550
 - Pawn logic uses `p in "PA"`, king logic uses `p in "KY"` to include powered variants
 - Non-slider stop set: `"PNKACYJ"` (includes Ninja Knight)
 - `engine.py` player_pieces includes `ACDTXYJ`
