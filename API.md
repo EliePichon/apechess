@@ -465,7 +465,7 @@ The engine supports custom piece types beyond standard chess. Include their FEN 
 | Powered Rook | `T` | `t` | Rook that can land on rocks (stops there, destroys the rock). |
 | Powered Queen | `X` | `x` | Queen that can land on rocks (stops there, destroys the rock). |
 | Powered King | `Y` | `y` | King that can land on rocks (destroying them). |
-| Ninja Knight | `J` | `j` | Knight that bounces off rocks via chained knight-hops. Rocks are **not** destroyed. See [Ninja Knight](#ninja-knight). |
+| Ninja Knight | `J` | `j` | Knight that bounces off rocks via chained knight-hops. Rocks are **not** destroyed. Value: 550. See [Ninja Knight](#ninja-knight). |
 
 **Example FEN with Ninja Knights and rocks:**
 ```
@@ -482,6 +482,9 @@ The Ninja Knight (`J`/`j`) moves like a normal knight but can "bounce" off rocks
 - Captures only happen at the final destination, never on intermediate rocks
 - The knight cannot revisit any square during a bounce chain (no cycles)
 - Bounce chain length is unlimited (naturally capped by board geometry)
+
+**Parkour Activation:**
+When any Knight (`N`) or Powered Knight (`C`) makes a capture, **all** `N` and `C` pieces on the same side are automatically upgraded to Ninja Knights (`J`). This transformation is permanent and happens server-side during move application. No client action is required — subsequent `/getmoves`, `/turn`, and `/evalmoves` responses will reflect the upgraded pieces (including bounce move paths if rocks are present). The engine values this activation at +270 centipawns per piece upgraded (J=550 vs N=280).
 
 **API behavior:**
 - `/getmoves` returns multi-char path strings for bounce moves (e.g., `"b1c3e4"`)
