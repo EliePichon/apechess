@@ -15,6 +15,41 @@ Sunfish is a simple but strong chess engine written in Python. This fork wraps i
 - **MTD-bi Search** — With Piece Square Tables, transposition tables, and null-move pruning
 - **C Extension** — Hot paths (gen_moves, value, move, rotate) in C for ~5x speedup over pure Python
 
+## Piece Characters
+
+All pieces use ASCII letter pairs (uppercase=White, lowercase=Black) that survive `swapcase()` rotation.
+
+### In Use
+
+| Char | Piece | Value | Notes |
+|------|-------|-------|-------|
+| P/p | Pawn | 100 | Standard |
+| N/n | Knight | 280 | Standard |
+| B/b | Bishop | 320 | Standard |
+| R/r | Rook | 479 | Standard |
+| Q/q | Queen | 929 | Standard |
+| K/k | King | 60000 | Standard |
+| O/o | Rock | 0 | Neutral, immovable obstacle |
+| A/a | Augmented Pawn | 100 | Powered — can destroy rocks |
+| C/c | Cavalry | 280 | Powered Knight |
+| D/d | Diagonal | 320 | Powered Bishop |
+| T/t | Tower | 479 | Powered Rook |
+| X/x | eXtreme | 929 | Powered Queen |
+| Y/y | Yonder | 60000 | Powered King |
+| J/j | Ninja Knight | 550 | Bounce-capable Knight |
+
+Non-piece characters: `.` (empty square), space and `\n` (board padding).
+
+### Available
+
+| Char | | Char | | Char | | Char |
+|------|-|------|-|------|-|------|
+| E/e | | H/h | | S/s | | W/w |
+| F/f | | L/l | | U/u | | Z/z |
+| G/g | | M/m | | V/v | | |
+
+Avoid `I/i` (visually confusing with `1`/`l` in debug output). That leaves **11 safe pairs** for future piece types.
+
 ## Quick Start
 
 ```bash
