@@ -20,16 +20,17 @@ import sunfish
 
 
 # Piece index mapping: must match PIECE_INDEX in the generated header
-PIECE_ORDER = ["P", "N", "B", "R", "Q", "K", "O", "J"]
+PIECE_ORDER = ["P", "N", "B", "R", "Q", "K", "O", "J", "L"]
 PIECE_CHARS = {
     "P": 0, "A": 0,  # pawns share index
     "N": 1, "C": 1,  # knights
-    "B": 2, "D": 2,  # bishops
+    "B": 2, "D": 2, "G": 2,  # bishops (G=bloodied bishop shares B's index)
     "R": 3, "T": 3,  # rooks
     "Q": 4, "X": 4,  # queens
     "K": 5, "Y": 5,  # kings
     "O": 6,           # rocks
     "J": 7,           # ninja knight (own index, higher piece value than N)
+    "L": 8,           # laser bishop (own index, higher piece value than B)
 }
 
 

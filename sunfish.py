@@ -43,6 +43,8 @@ piece = {
     "X": 929,
     "Y": 60000,
     "J": 550,
+    "G": 320,
+    "L": 950,
 }
 pst = {
     "P": (
@@ -524,6 +526,10 @@ for powered, base in POWERED_TO_BASE.items():
 # Ninja Knight uses Knight's positional bonuses but with its own piece value
 pst["J"] = tuple(v - piece["N"] + piece["J"] for v in pst["N"])
 
+# Bloodied Bishop shares Bishop's PST; Laser Bishop shifts by value difference
+pst["G"] = pst["B"]
+pst["L"] = tuple(v - piece["B"] + piece["L"] for v in pst["B"])
+
 ###############################################################################
 # Global constants
 ###############################################################################
@@ -572,6 +578,8 @@ directions = {
     "K": (N, E, S, W, N + E, S + E, S + W, N + W),
     "O": (),  # Rocks don't move
     "J": (N + N + E, E + N + E, E + S + E, S + S + E, S + S + W, W + S + W, W + N + W, N + N + W),
+    "G": (N + E, S + E, S + W, N + W),
+    "L": (N + E, S + E, S + W, N + W),
 }
 # Powered pieces share directions with their base pieces
 for _powered, _base in POWERED_TO_BASE.items():
@@ -583,6 +591,8 @@ PAWNS = frozenset("PA")
 KINGS = frozenset("KY")
 ROCKS = frozenset("Oo")
 NINJA_KNIGHTS = frozenset("J")
+LASER_BISHOPS = frozenset("L")
+BISHOP_FAMILY = frozenset("BDG")
 PROMOTION_PIECES = {"A": "CDTX", "P": "NBRQ"}
 
 # Module-level precision for randomized play (set by engine.py before search)
@@ -673,6 +683,17 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if p == "J":
                 for dest in self._ninja_knight_dests(i):
                     yield (i, dest, "")
+                continue
+            if p == "L":
+                for d in directions["L"]:
+                    for j in count(i + d, d):
+                        q = self.board[j]
+                        if q.isspace():
+                            break
+                        # Can only stop on empty squares or capturable enemies
+                        if q == "." or (q.islower() and q != "o"):
+                            yield (i, j, "")
+                        # Keep sliding through everything (allies, rocks, enemies)
                 continue
             for d in directions[p]:
                 for j in count(i + d, d):
@@ -765,6 +786,21 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             for sq in range(len(board)):
                 if board[sq] in ("N", "C"):
                     board = _put(board, sq, "J")
+        # Laser Bishop activation: bishop-family capture upgrades in two phases
+        if p in ("B", "D", "G") and q.islower() and q != "o":
+            has_g = "G" in board
+            if p == "G" or has_g:
+                # Phase 2: all G/B/D -> L (Laser Bishop)
+                board = _put(board, j, "L")
+                for sq in range(len(board)):
+                    if board[sq] in ("G", "B", "D"):
+                        board = _put(board, sq, "L")
+            else:
+                # Phase 1: all B/D -> G (Bloodied Bishop)
+                board = _put(board, j, "G")
+                for sq in range(len(board)):
+                    if board[sq] in ("B", "D") and sq != j:
+                        board = _put(board, sq, "G")
         # We rotate the returned position, so it's ready for the next player
 
         return Position(board, score, wc, bc, ep, kp).rotate()
@@ -799,6 +835,17 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             for sq in range(len(self.board)):
                 if sq != i and self.board[sq] in ("N", "C"):
                     score += pst["J"][sq] - pst[self.board[sq]][sq]
+
+        # Laser Bishop activation bonus: bishop-family capture upgrades in two phases
+        if p in ("B", "D", "G") and q.islower() and q != "o":
+            has_g = "G" in self.board
+            if p == "G" or has_g:
+                # Phase 2: all G/B/D -> L — score the upgrade
+                score += pst["L"][j] - pst[p][j]
+                for sq in range(len(self.board)):
+                    if sq != i and self.board[sq] in ("G", "B", "D"):
+                        score += pst["L"][sq] - pst[self.board[sq]][sq]
+            # Phase 1: B/D -> G — same PST, delta is 0, no adjustment needed
 
         # Then apply the random factor:
         if _precision > 0.0:

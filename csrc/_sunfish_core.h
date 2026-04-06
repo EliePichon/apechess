@@ -81,6 +81,14 @@ static const unsigned char IS_NON_SLIDER[128] = {
     ['P'] = 1, ['N'] = 1, ['K'] = 1, ['A'] = 1, ['C'] = 1, ['Y'] = 1, ['J'] = 1,
 };
 
+static const unsigned char IS_LASER_BISHOP[128] = {
+    ['L'] = 1,
+};
+
+static const unsigned char IS_BISHOP_FAMILY[128] = {
+    ['B'] = 1, ['D'] = 1, ['G'] = 1,
+};
+
 /* Get directions and count for a piece character.
  * Returns pointers to static arrays. */
 static inline void get_directions(char p, const int **dirs, int *ndirs) {
@@ -89,7 +97,7 @@ static inline void get_directions(char p, const int **dirs, int *ndirs) {
             *dirs = PAWN_DIRS; *ndirs = PAWN_NDIRS; break;
         case 'N': case 'C': case 'J':
             *dirs = KNIGHT_DIRS; *ndirs = KNIGHT_NDIRS; break;
-        case 'B': case 'D':
+        case 'B': case 'D': case 'G': case 'L':
             *dirs = BISHOP_DIRS; *ndirs = BISHOP_NDIRS; break;
         case 'R': case 'T':
             *dirs = ROOK_DIRS; *ndirs = ROOK_NDIRS; break;

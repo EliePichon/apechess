@@ -291,7 +291,7 @@ def _get_legal_moves_from_pos(pos, white_pov):
 
     Returns dict: {square_str: [move_str, ...]}
     """
-    player_pieces = frozenset("PNBRQKACDTXYJ")
+    player_pieces = frozenset("PNBRQKACDTXYJGL")
     moves = {}
     for i, piece_char in enumerate(pos.board):
         if piece_char in player_pieces:
@@ -711,7 +711,7 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None, s
     check = can_kill_king(pos.rotate())
 
     # Build response grouped by source square
-    player_pieces = frozenset("PNBRQKACDTXYJ")
+    player_pieces = frozenset("PNBRQKACDTXYJGL")
     moves_by_square = {}
     all_evals = []
 

@@ -96,6 +96,28 @@ static int gen_moves_internal(
             continue;
         }
 
+        /* Laser Bishop: slides through everything, stops only on empty/enemy */
+        if (p == 'L') {
+            for (di = 0; di < ndirs; di++) {
+                int d = dirs[di];
+                for (j = i + d; ; j += d) {
+                    q = board[j];
+                    if (IS_SPACE[(unsigned char)q])
+                        break;
+                    if (q == '.' || (IS_LOWER[(unsigned char)q] && q != 'o')) {
+                        if (count < max_moves) {
+                            moves[count].i = i;
+                            moves[count].j = j;
+                            moves[count].prom = '\0';
+                            count++;
+                        }
+                    }
+                    /* Keep sliding through allies, rocks, enemies — no break */
+                }
+            }
+            continue;
+        }
+
         for (di = 0; di < ndirs; di++) {
             int d = dirs[di];
             for (j = i + d; ; j += d) {
@@ -261,6 +283,31 @@ static int value_internal(
                 score += PST[ji][si] - PST[bpi][si];
             }
         }
+    }
+
+    /* Laser Bishop activation: bishop-family capture upgrades in two phases */
+    if (IS_BISHOP_FAMILY[(unsigned char)p] && IS_LOWER[(unsigned char)q] && q != 'o') {
+        int is_phase2 = (p == 'G');
+        if (!is_phase2) {
+            int si;
+            for (si = 0; si < BOARD_SIZE && !is_phase2; si++) {
+                if (board[si] == 'G') is_phase2 = 1;
+            }
+        }
+        if (is_phase2) {
+            int li = PIECE_INDEX[(unsigned char)'L'];
+            /* Score upgrading the mover */
+            score += PST[li][mj] - PST[pi][mj];
+            /* Score upgrading all bystander G/B/D */
+            int si;
+            for (si = 0; si < BOARD_SIZE; si++) {
+                if (si != mi && IS_BISHOP_FAMILY[(unsigned char)board[si]]) {
+                    int bpi = PIECE_INDEX[(unsigned char)board[si]];
+                    score += PST[li][si] - PST[bpi][si];
+                }
+            }
+        }
+        /* Phase 1: G shares B PST, delta is 0, no adjustment */
     }
 
     return score;
@@ -697,6 +744,36 @@ static PyObject *py_move_and_rotate(PyObject *self, PyObject *args) {
         for (si = 0; si < BOARD_SIZE; si++) {
             if (buf[si] == 'N' || buf[si] == 'C') {
                 buf[si] = 'J';
+            }
+        }
+    }
+
+    /* Laser Bishop activation: bishop-family capture upgrades in two phases */
+    if (IS_BISHOP_FAMILY[(unsigned char)p] && IS_LOWER[(unsigned char)board[mj]] && board[mj] != 'o') {
+        int is_phase2 = (p == 'G');
+        if (!is_phase2) {
+            int si;
+            for (si = 0; si < BOARD_SIZE && !is_phase2; si++) {
+                if (board[si] == 'G') is_phase2 = 1;
+            }
+        }
+        if (is_phase2) {
+            /* Phase 2: all G/B/D -> L */
+            buf[mj] = 'L';
+            int si;
+            for (si = 0; si < BOARD_SIZE; si++) {
+                if (IS_BISHOP_FAMILY[(unsigned char)buf[si]]) {
+                    buf[si] = 'L';
+                }
+            }
+        } else {
+            /* Phase 1: all B/D -> G */
+            buf[mj] = 'G';
+            int si;
+            for (si = 0; si < BOARD_SIZE; si++) {
+                if ((buf[si] == 'B' || buf[si] == 'D') && si != mj) {
+                    buf[si] = 'G';
+                }
             }
         }
     }

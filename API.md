@@ -466,6 +466,8 @@ The engine supports custom piece types beyond standard chess. Include their FEN 
 | Powered Queen | `X` | `x` | Queen that can land on rocks (stops there, destroys the rock). |
 | Powered King | `Y` | `y` | King that can land on rocks (destroying them). |
 | Ninja Knight | `J` | `j` | Knight that bounces off rocks via chained knight-hops. Rocks are **not** destroyed. Value: 550. See [Ninja Knight](#ninja-knight). |
+| Bloodied Bishop | `G` | `g` | Intermediate bishop (after 1st bishop capture). Moves like a regular bishop. Value: 320. See [Laser Bishop](#laser-bishop). |
+| Laser Bishop | `L` | `l` | Upgraded bishop that slides through all pieces on diagonals. Value: 950. See [Laser Bishop](#laser-bishop). |
 
 **Example FEN with Ninja Knights and rocks:**
 ```
@@ -503,6 +505,42 @@ When any Knight (`N`) or Powered Knight (`C`) makes a capture, **all** `N` and `
 }
 ```
 Here `"b1a3"` is a direct hop (4 chars) and `"b1c3d5"` is a single bounce through the rock on c3 (6 chars).
+
+### Laser Bishop
+
+The Laser Bishop (`L`/`l`) is an upgraded Bishop that slides through **all** pieces on diagonals — allies, enemies, and rocks. It can only stop on empty squares or enemy pieces (to capture them). Board edges still stop the ray.
+
+**Activation** is a two-phase mechanic triggered by bishop captures:
+
+1. **Phase 1 — Bloodied Bishop (`G`)**: When any Bishop (`B`) or Powered Bishop (`D`) captures an enemy piece, **all** `B` and `D` pieces on that side become `G` (Bloodied Bishop). `G` moves identically to a regular bishop — the transformation is a stepping stone.
+
+2. **Phase 2 — Laser Bishop (`L`)**: When any `G` captures an enemy piece, **all** `G`/`B`/`D` pieces on that side become `L` (Laser Bishop). This is the final transformation.
+
+Both phases happen server-side during move application. No client action is required — subsequent API responses reflect the upgraded pieces automatically.
+
+**Laser Bishop movement rules:**
+- Slides along diagonals (same 4 directions as a regular bishop)
+- **Passes through** all pieces: allies, enemies, rocks — nothing blocks the ray except the board edge
+- **Can stop on**: empty squares or enemy pieces (capturing them)
+- **Cannot stop on**: rocks, allies, or board padding
+- Can capture an enemy piece with more pieces behind it (continues sliding past the capture)
+
+**API behavior:**
+- Laser Bishop moves use standard 4-char coordinate notation (e.g., `"a1f6"`) — no multi-hop paths like Ninja Knight
+- `/getmoves` returns all reachable squares, including those beyond blocking pieces
+- Activation is reflected in subsequent responses: piece types in FEN change from `B`/`D` → `G` → `L`
+- The engine values Phase 2 activation at +630 centipawns per piece upgraded (L=950 vs B=320)
+
+**Example `/getmoves` with Laser Bishop:**
+```json
+{
+  "moves": {
+    "a1": ["a1b2", "a1c3", "a1d4", "a1e5", "a1f6", "a1g7", "a1h8"]
+  },
+  "check": false
+}
+```
+Here `L` on a1 reaches h8 even if allies, enemies, or rocks sit on the diagonal — it slides through them all.
 
 ### Eval Scores
 

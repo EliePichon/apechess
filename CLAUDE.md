@@ -57,7 +57,7 @@ Variants of standard pieces that can **land on rocks**, destroying them. Encoded
 - Pawn logic: `p in "PA"` (not `p == "P"`)
 - King logic: `p in "KY"` (not `p == "K"`)
 - Non-slider stop set: `"PNKACY"` (not `"PNK"`)
-- `engine.py`: player_pieces includes `ACDTXY`
+- `engine.py`: player_pieces includes `ACDTXYJGL`
 - Tests: `tests/test_rock_landing.py`
 
 ### Ninja Knight (`J`/`j`)
@@ -74,11 +74,6 @@ An upgraded Knight that can "bounce" off rocks via chained knight-hops. When a k
 - `engine.py`: `player_pieces` includes `J`.
 
 **Parkour Activation**: When any Knight (`N`) or Powered Knight (`C`) makes a **capture**, ALL `N` and `C` pieces on the same side are upgraded to Ninja Knights (`J`). This is a one-time transformation — the board string encodes the activation state (no extra fields needed).
-- Trigger: `p in ("N", "C")` and target is a lowercase enemy piece (not `o`).
-- Board transformation happens in `Position.move()` (Python) and `move_and_rotate()` (C).
-- Score adjustment happens in `Position.value()` (Python) and `value_internal()` (C) — adds PST delta for mover + all bystander N/C pieces.
-- The engine values activation at +270 per piece upgraded (550 - 280), making knight captures strategically attractive.
-- After activation, `J` captures do NOT re-trigger (already upgraded).
 
 **API move format**: Bounce moves use multi-char path strings. Pattern: `<origin><sq1>[<sq2>]...` where each segment is 2 chars.
 - Direct hop: `"b1c3"` (4 chars, same as normal knight)
@@ -94,6 +89,44 @@ An upgraded Knight that can "bounce" off rocks via chained knight-hops. When a k
 - `csrc/_sunfish_core.c`: DFS bounce logic in `gen_moves_internal`, parkour activation in `value_internal()` and `move_and_rotate()`
 - `scripts/gen_tables.py`: J has own PST index (7), separate from N (1)
 - Tests: `tests/test_ninja_knight.py`, parkour tests in `tests/test_c_extension.py`
+
+### Laser Bishop (`L`/`l`) and Bloodied Bishop (`G`/`g`)
+
+An upgraded Bishop that slides through ALL pieces on diagonals. Activated via a two-phase capture mechanic using an intermediate piece (`G`, Bloodied Bishop).
+
+**Piece Characters**:
+| Char | Name | Value | PST index | Behavior |
+|------|------|-------|-----------|----------|
+| `G`/`g` | Bloodied Bishop | 320 | 2 (shares B) | Moves like regular bishop |
+| `L`/`l` | Laser Bishop | 950 | 8 (own) | Slides through everything |
+
+**Laser Bishop Movement**:
+- Slides along diagonals (same directions as B).
+- **Passes through** all pieces: allies, enemies, rocks. Nothing blocks the ray except the board edge.
+- **Can stop on**: empty squares (`.`) or enemy pieces (capturing them).
+- **Cannot stop on**: rocks (`O`/`o`), allies (uppercase), board padding.
+- Can capture an enemy with more pieces behind it (keeps sliding past).
+- Standard 4-char algebraic move format (no multi-hop like Ninja Knight).
+
+**Two-Phase Activation**:
+- **Phase 1**: When any Bishop (`B`) or Powered Bishop (`D`) captures an enemy piece, ALL `B` and `D` pieces on that side become `G` (Bloodied Bishop). G moves identically to a regular bishop.
+- **Phase 2**: When any `G` captures an enemy piece (or `B`/`D` captures when `G` already exists on board), ALL `G`/`B`/`D` become `L` (Laser Bishop).
+- Trigger: `p in ("B", "D", "G")` and target is a lowercase enemy piece (not `o`).
+- The intermediate char `G` encodes the capture count in the board string — no extra state fields needed.
+- Board transformation happens in `Position.move()` (Python) and `move_and_rotate()` (C).
+- Score adjustment happens in `Position.value()` (Python) and `value_internal()` (C) — Phase 2 adds PST delta (+630 per piece). Phase 1 has zero delta (G shares B's PST).
+- After full activation to `L`, further captures do NOT re-trigger.
+- `LASER_BISHOPS = frozenset("L")`, `BISHOP_FAMILY = frozenset("BDG")` for identity checks.
+- G and L are **not** powered pieces, **not** in `NON_SLIDERS`, **not** in `POWERED_TO_BASE`.
+- `engine.py`: `player_pieces` includes `G` and `L`.
+
+**Implementation touchpoints**:
+- `sunfish.py`: `piece`, `pst`, `directions` dicts, `LASER_BISHOPS`, `BISHOP_FAMILY`, `gen_moves()` branch for `p == "L"`, activation in `move()` and `value()`
+- `engine.py`: `player_pieces` includes `GL`
+- `csrc/_sunfish_core.h`: `IS_LASER_BISHOP`, `IS_BISHOP_FAMILY`, `get_directions` includes G and L
+- `csrc/_sunfish_core.c`: Laser slide in `gen_moves_internal`, activation in `value_internal()` and `move_and_rotate()`
+- `scripts/gen_tables.py`: G shares B's PST index (2), L has own PST index (8)
+- Tests: `tests/test_laser_bishop.py`, laser tests in `tests/test_c_extension.py`
 
 ## REST API
 
@@ -163,10 +196,10 @@ Eval gap between the best and 2nd-best move — measures how critical the turn i
 - Game over: `_detect_game_over(pos)` returns `"king_captured"`, `"checkmate"`, `"stalemate"`, or `None`. King capture is checked first (missing `K`/`Y` in board). Occurs in modified-rule scenarios (e.g., double turns) where a king ends up capturable.
 - Move application: `Position.move(m)` returns new position (rotated for opponent)
 - **Moves are plain tuples** `(i, j, prom)`, not namedtuples. Access via indexing (`move[0]`, `move[1]`, `move[2]`) or unpacking (`i, j, prom = move`). Do NOT use `.i`, `.j`, `.prom` attribute access.
-- Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0, J=550
+- Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0, J=550, G=320, L=950
 - Pawn logic uses `p in "PA"`, king logic uses `p in "KY"` to include powered variants
 - Non-slider stop set: `"PNKACYJ"` (includes Ninja Knight)
-- `engine.py` player_pieces includes `ACDTXYJ`
+- `engine.py` player_pieces includes `ACDTXYJGL`
 - **Precision** is a module-level variable `sunfish._precision` (set by engine.py before search, default 0.0). Do not set it on the Searcher instance.
 
 ## Testing
@@ -181,7 +214,7 @@ make logs                   # View server logs
 ```
 
 Tests are integration tests in `tests/` hitting HTTP endpoints inside Docker.
-Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_king_capture.py`, `test_performance.py`, `test_ninja_knight.py`.
+Test files: `test_top_n.py`, `test_ignore_squares.py`, `test_rocks.py`, `test_rock_landing.py`, `test_session.py`, `test_dream_api.py`, `test_king_capture.py`, `test_performance.py`, `test_ninja_knight.py`, `test_laser_bishop.py`.
 
 C extension tests run locally (no Docker needed):
 ```bash

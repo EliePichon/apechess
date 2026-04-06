@@ -464,6 +464,99 @@ def test_parkour_score_and_sort_with_capture():
     assert ok, f"Parkour score_and_sort: {detail}"
 
 
+# --- Laser Bishop (L/G) tests ---
+
+
+def test_laser_bishop_basic():
+    """gen_moves for Laser Bishop on open board."""
+    ok, detail = compare_gen_moves("4k3/8/8/8/3L4/8/8/4K3 w - - 0 1")
+    assert ok, f"Laser Bishop basic: {detail}"
+
+
+def test_laser_bishop_through_allies():
+    """L slides through friendly pieces."""
+    ok, detail = compare_gen_moves("4k3/8/8/8/3L4/8/1P6/4K3 w - - 0 1")
+    assert ok, f"Laser through allies: {detail}"
+
+
+def test_laser_bishop_through_enemies():
+    """L slides through enemy pieces, can capture them."""
+    ok, detail = compare_gen_moves("4k3/8/5p2/8/3L4/2p5/8/4K3 w - - 0 1")
+    assert ok, f"Laser through enemies: {detail}"
+
+
+def test_laser_bishop_through_rocks():
+    """L slides through rocks, cannot stop on them."""
+    ok, detail = compare_gen_moves("4k3/8/8/4O3/3L4/2O5/8/4K3 w - - 0 1")
+    assert ok, f"Laser through rocks: {detail}"
+
+
+def test_laser_bishop_dense():
+    """L with many pieces on diagonals."""
+    ok, detail = compare_gen_moves("4k3/8/5p2/4N3/3L4/2O5/1p6/4K3 w - - 0 1")
+    assert ok, f"Laser dense: {detail}"
+
+
+def test_bloodied_bishop_gen_moves():
+    """G moves like a regular bishop (blocked normally)."""
+    ok, detail = compare_gen_moves("4k3/8/8/8/3G4/8/8/4K3 w - - 0 1")
+    assert ok, f"Bloodied Bishop gen_moves: {detail}"
+
+
+def test_bloodied_bishop_blocked():
+    """G is blocked by allies like a normal bishop."""
+    ok, detail = compare_gen_moves("4k3/8/8/8/3G4/4P3/8/4K3 w - - 0 1")
+    assert ok, f"Bloodied Bishop blocked: {detail}"
+
+
+def test_laser_value_phase2():
+    """value() includes phase 2 bonus when G captures."""
+    ok, detail = compare_value("4k3/8/8/3p4/2G5/8/8/5G1K w - - 0 1")
+    assert ok, f"Laser value phase 2: {detail}"
+
+
+def test_laser_value_phase1():
+    """value() for phase 1 (B capture, no score delta for B->G)."""
+    ok, detail = compare_value("4k3/8/8/3p4/2B5/8/8/5B1K w - - 0 1")
+    assert ok, f"Laser value phase 1: {detail}"
+
+
+def test_laser_value_with_bystanders():
+    """value() phase 2 bonus accounts for multiple G pieces."""
+    ok, detail = compare_value("4k3/8/8/3p4/2G5/8/G7/4K1G1 w - - 0 1")
+    assert ok, f"Laser value bystanders: {detail}"
+
+
+def test_laser_move_phase1():
+    """move_and_rotate() transforms B/D -> G after first bishop capture."""
+    ok, detail = compare_move("4k3/8/8/3p4/2B5/8/8/5B1K w - - 0 1")
+    assert ok, f"Laser move phase 1: {detail}"
+
+
+def test_laser_move_phase2():
+    """move_and_rotate() transforms G -> L after second bishop capture."""
+    ok, detail = compare_move("4k3/8/8/3p4/2G5/8/8/5G1K w - - 0 1")
+    assert ok, f"Laser move phase 2: {detail}"
+
+
+def test_laser_move_powered_bishop():
+    """move_and_rotate() D capture triggers phase 1."""
+    ok, detail = compare_move("4k3/8/8/3p4/2D5/8/8/5B1K w - - 0 1")
+    assert ok, f"Laser move powered bishop: {detail}"
+
+
+def test_laser_move_no_activation_non_capture():
+    """G moving to empty square does not trigger phase 2."""
+    ok, detail = compare_move("4k3/8/8/8/2G5/8/8/5G1K w - - 0 1")
+    assert ok, f"Laser no activation non-capture: {detail}"
+
+
+def test_laser_score_and_sort_phase2():
+    """score_and_sort includes laser bonus for G captures."""
+    ok, detail = compare_score_and_sort("4k3/8/8/3p4/2G5/8/G7/4K3 w - - 0 1")
+    assert ok, f"Laser score_and_sort: {detail}"
+
+
 if __name__ == "__main__":
     import pytest
 
