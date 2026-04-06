@@ -5,8 +5,8 @@ Base URL: `http://localhost:5500`
 ## Quick Start (Dream API)
 
 ```bash
-# 1. Start a game
-curl -X POST /newgame -d '{}'
+# 1. Start a game (optionally with heroes for special mechanics)
+curl -X POST /newgame -d '{ "heroes": { "white": "charles" } }'
 # → { "session_id": "a3f8b2c1d4e5" }
 
 # 2. Opponent (computer) plays with peek_next — one call does everything
@@ -66,6 +66,14 @@ Create a new game session.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `fen` | string | No | Standard starting position | FEN string for the initial position |
+| `heroes` | object | No | `{}` | Hero assignments per side. See [Heroes](#heroes). |
+
+**`heroes` object:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `white` | string | Hero for white. `"charles"` (parkour) or `"steina"` (laser). |
+| `black` | string | Hero for black. Same values as above. |
 
 **Response:**
 
@@ -76,6 +84,7 @@ Create a new game session.
 **Notes:**
 - Session IDs are server-generated (12-char hex strings)
 - Sessions auto-expire after 30 minutes of inactivity
+- Hero assignments are fixed for the session's lifetime
 
 ---
 
@@ -250,6 +259,7 @@ Get all legal moves with an evaluation score for each. Runs a search to populate
 | `maxdepth` | int | No | `8` | Search depth |
 | `movetime` | int | No | — | Time limit in milliseconds |
 | `moves` | string | No | `""` | Space-separated move history (used with `fen`) |
+| `heroes` | object | No | — | Hero assignments for stateless mode. See [Heroes](#heroes). Ignored when `session_id` is used. |
 
 **Response:**
 
@@ -294,6 +304,7 @@ Get the engine's best move(s) for the current position.
 | `ignore_squares` | string[] | No | `[]` | List of squares whose pieces should not be moved (e.g. `["e2", "g1"]`) |
 | `moves` | string | No | `""` | Space-separated move history |
 | `clutchness` | bool | No | `false` | Include clutchness metric in response |
+| `heroes` | object | No | — | Hero assignments for stateless mode. See [Heroes](#heroes). Ignored when `session_id` is used (session heroes apply). |
 
 **Response:**
 
@@ -398,6 +409,33 @@ Health check.
 
 ## Key Concepts
 
+### Heroes
+
+Heroes gate access to special activation mechanics. Without the corresponding hero selected, captures happen normally without triggering piece upgrades.
+
+| Hero | Mechanic | Effect |
+|------|----------|--------|
+| `charles` | [Parkour Activation](#ninja-knight) | Knight/Powered Knight captures upgrade all N/C to Ninja Knight (J) |
+| `steina` | [Laser Bishop Activation](#laser-bishop) | Bishop captures trigger the two-phase B → G → L upgrade chain |
+
+**Per-game scope:** If either side has a hero, that activation is enabled for the entire game (both sides). This is a game-level setting, not per-turn.
+
+**Setting heroes:**
+- **Session mode:** Pass `heroes` in `/newgame`. The session remembers the hero config for all subsequent `/turn` and `/move` calls.
+- **Stateless mode:** Pass `heroes` on `/bestmove` or `/evalmoves`.
+
+**Example:**
+```bash
+# Game with parkour knights (charles) for white
+curl -X POST /newgame -d '{ "heroes": { "white": "charles" } }'
+
+# Game with both heroes
+curl -X POST /newgame -d '{ "heroes": { "white": "charles", "black": "steina" } }'
+
+# No heroes — standard chess, no special activations
+curl -X POST /newgame -d '{}'
+```
+
 ### Clutchness
 
 The eval gap between the best move and the second-best move. A high clutchness means the position is critical — there's one clearly best move and the others are significantly worse. A low clutchness means several moves are roughly equally good.
@@ -485,8 +523,8 @@ The Ninja Knight (`J`/`j`) moves like a normal knight but can "bounce" off rocks
 - The knight cannot revisit any square during a bounce chain (no cycles)
 - Bounce chain length is unlimited (naturally capped by board geometry)
 
-**Parkour Activation:**
-When any Knight (`N`) or Powered Knight (`C`) makes a capture, **all** `N` and `C` pieces on the same side are automatically upgraded to Ninja Knights (`J`). This transformation is permanent and happens server-side during move application. No client action is required — subsequent `/getmoves`, `/turn`, and `/evalmoves` responses will reflect the upgraded pieces (including bounce move paths if rocks are present). The engine values this activation at +270 centipawns per piece upgraded (J=550 vs N=280).
+**Parkour Activation** (requires hero `"charles"`)**:**
+When any Knight (`N`) or Powered Knight (`C`) makes a capture, **all** `N` and `C` pieces on the same side are automatically upgraded to Ninja Knights (`J`). This transformation is permanent and happens server-side during move application. No client action is required — subsequent `/getmoves`, `/turn`, and `/evalmoves` responses will reflect the upgraded pieces (including bounce move paths if rocks are present). The engine values this activation at +270 centipawns per piece upgraded (J=550 vs N=280). **Without the `"charles"` hero, knight captures happen normally without triggering this upgrade.**
 
 **API behavior:**
 - `/getmoves` returns multi-char path strings for bounce moves (e.g., `"b1c3e4"`)
@@ -510,13 +548,13 @@ Here `"b1a3"` is a direct hop (4 chars) and `"b1c3d5"` is a single bounce throug
 
 The Laser Bishop (`L`/`l`) is an upgraded Bishop that slides through **all** pieces on diagonals — allies, enemies, and rocks. It can only stop on empty squares or enemy pieces (to capture them). Board edges still stop the ray.
 
-**Activation** is a two-phase mechanic triggered by bishop captures:
+**Activation** (requires hero `"steina"`) is a two-phase mechanic triggered by bishop captures:
 
 1. **Phase 1 — Bloodied Bishop (`G`)**: When any Bishop (`B`) or Powered Bishop (`D`) captures an enemy piece, **all** `B` and `D` pieces on that side become `G` (Bloodied Bishop). `G` moves identically to a regular bishop — the transformation is a stepping stone.
 
 2. **Phase 2 — Laser Bishop (`L`)**: When any `G` captures an enemy piece, **all** `G`/`B`/`D` pieces on that side become `L` (Laser Bishop). This is the final transformation.
 
-Both phases happen server-side during move application. No client action is required — subsequent API responses reflect the upgraded pieces automatically.
+Both phases happen server-side during move application. No client action is required — subsequent API responses reflect the upgraded pieces automatically. **Without the `"steina"` hero, bishop captures happen normally without triggering any phase transition.**
 
 **Laser Bishop movement rules:**
 - Slides along diagonals (same 4 directions as a regular bishop)

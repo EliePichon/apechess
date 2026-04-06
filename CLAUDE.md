@@ -157,7 +157,7 @@ Any session endpoint accepts optional `fen` to override/re-sync position.
 
 ### Endpoints
 
-- `POST /newgame` — Create session. Optional `fen` (defaults to starting position). Returns `{session_id: string}`.
+- `POST /newgame` — Create session. Optional `fen` (defaults to starting position), optional `heroes` (see Heroes). Returns `{session_id: string}`.
 - `POST /turn` — Computer plays a turn. Searches for best move, applies it to session, detects game state.
   - Params: `session_id`, `maxdepth` (default 15), `movetime`, `precision` (0=strongest), `top_n` (default 1), `ignore_squares`, `peek_next` (bool), `peek_maxdepth` (default 5)
   - Returns `{move, eval, check, game_over, next?: {legal_moves, check, clutchness, best_eval, best_move}}`
@@ -186,6 +186,26 @@ Any session endpoint accepts optional `fen` to override/re-sync position.
 ### Clutchness
 
 Eval gap between the best and 2nd-best move — measures how critical the turn is. Available on `/bestmove` (with `clutchness: true`) and `/evalmoves` (always included).
+
+### Heroes
+
+Heroes gate special activation mechanics. Without a hero, captures happen normally.
+
+| Hero | Mechanic | Activation |
+|------|----------|------------|
+| `charles` | Parkour | N/C capture → all N/C become J (Ninja Knight) |
+| `steina` | Laser Bishop | B/D capture → B/D become G → G capture → all become L |
+
+**Implementation**: Module-level flags `sunfish._parkour_enabled` and `sunfish._laser_enabled` (default `True`). Set by `engine._apply_hero_flags(heroes)` before every search, under the session lock (same pattern as `_precision`).
+
+- `GameSession.__init__` accepts `heroes` dict, stored as `self.heroes`
+- `create_session(fen, heroes)` forwards to `GameSession`
+- `/newgame` accepts `heroes: {"white": "charles", "black": "steina"}`
+- Stateless endpoints (`/bestmove`, `/evalmoves`) accept optional `heroes` param
+- **Per-game scope**: if either side has a hero, that activation is enabled for both sides during search
+- C extension: `value_internal()` and `move_and_rotate()` receive `parkour_enabled`/`laser_enabled` as extra int params
+- Valid hero values: `VALID_HEROES = {"charles", "steina"}` (defined in `engine.py`)
+- Tests: `tests/test_heroes.py`
 
 ## Key Conventions
 

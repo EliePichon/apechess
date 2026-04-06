@@ -47,7 +47,7 @@ logs:
 	docker-compose logs -f
 
 # Run all tests
-test: test-top-n test-ignore test-rock-landing test-session test-dream
+test: test-top-n test-ignore test-rock-landing test-session test-dream test-heroes
 	@echo ""
 	@echo "✓ All tests completed!"
 
@@ -75,6 +75,11 @@ test-session:
 test-dream:
 	@echo "Running Dream API tests..."
 	python3 tests/test_dream_api.py
+
+# Run heroes activation gating tests
+test-heroes:
+	@echo "Running heroes tests..."
+	python3 tests/test_heroes.py
 
 # Run clutchness validation + calibration tests
 test-clutchness:

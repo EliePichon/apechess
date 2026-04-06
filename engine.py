@@ -126,8 +126,9 @@ class GameSession:
     TP_MOVE_CAP = 100_000
     EXPIRE_SECONDS = 1800  # 30 minutes
 
-    def __init__(self, session_id, fen=None):
+    def __init__(self, session_id, fen=None, heroes=None):
         self.session_id = session_id
+        self.heroes = heroes or {}
         self._searcher = sunfish.Searcher()
         self._lock = threading.Lock()
         self._last_used = time.time()
@@ -191,11 +192,11 @@ class GameSession:
 _sessions = {}
 
 
-def create_session(fen=None):
+def create_session(fen=None, heroes=None):
     """Create a new session with a server-generated ID. Returns session_id."""
     _cleanup_expired()
     sid = uuid.uuid4().hex[:12]
-    _sessions[sid] = GameSession(sid, fen)
+    _sessions[sid] = GameSession(sid, fen, heroes=heroes)
     return sid
 
 
@@ -229,6 +230,16 @@ def _cleanup_expired():
     expired = [sid for sid, s in _sessions.items() if s.is_expired()]
     for sid in expired:
         del _sessions[sid]
+
+
+VALID_HEROES = {"charles", "steina"}
+
+
+def _apply_hero_flags(heroes):
+    """Set module-level activation flags based on hero config."""
+    hero_values = set(heroes.values())
+    sunfish._parkour_enabled = "charles" in hero_values
+    sunfish._laser_enabled = "steina" in hero_values
 
 
 def build_history(fen, moves_str=""):
@@ -608,7 +619,7 @@ def _compute_check_after_move(bestmove, hist, moves_history="", initial_side="w"
     return can_kill_king(new_position.rotate())
 
 
-def _resolve_context(session_id, fen, moves_history, search_fn):
+def _resolve_context(session_id, fen, moves_history, search_fn, heroes=None):
     """Resolve session or stateless context and run a search.
 
     Returns (result, hist) on success. Raises EngineError on failure.
@@ -619,11 +630,13 @@ def _resolve_context(session_id, fen, moves_history, search_fn):
             raise EngineError("Invalid or expired session_id", 404)
         if fen:
             session.override_fen(fen, moves_history)
+        _apply_hero_flags(heroes if heroes is not None else session.heroes)
         result = session.run_search(search_fn)
         return result, session.hist
     else:
         if not fen:
             raise EngineError("Either fen or session_id is required", 400)
+        _apply_hero_flags(heroes or {})
         hist = build_history(fen, moves_history)
         searcher = sunfish.Searcher()
         result = search_fn(searcher, hist)
@@ -640,6 +653,7 @@ def get_best_moves(
     ignore_squares=None,
     session_id=None,
     clutchness=False,
+    heroes=None,
 ):
     """Compute the best move(s) for a position.
 
@@ -660,7 +674,7 @@ def get_best_moves(
         sunfish._precision = precision
         return _search_best_moves(searcher, hist, max_movetime, maxdepth, internal_top_n, ignore_squares or [])
 
-    result, hist = _resolve_context(session_id, fen, moves_history, do_search)
+    result, hist = _resolve_context(session_id, fen, moves_history, do_search, heroes=heroes)
 
     if result["bestmove"] == "(none)":
         return {"bestmoves": [], "check": False}
@@ -686,7 +700,7 @@ def get_best_moves(
     return response
 
 
-def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None, session_id=None):
+def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None, session_id=None, heroes=None):
     """Get all legal moves with evaluation scores for each.
 
     Runs a search to populate the TT, then scores each legal move via TT
@@ -701,7 +715,7 @@ def get_evaluated_moves(fen=None, moves_history="", maxdepth=8, movetime=None, s
         sunfish._precision = 0.0
         return _evaluate_all_moves(searcher, hist, max_movetime, maxdepth)
 
-    result, hist = _resolve_context(session_id, fen, moves_history, do_eval)
+    result, hist = _resolve_context(session_id, fen, moves_history, do_eval, heroes=heroes)
 
     # Determine side to move for coordinate rendering
     white_pov = len(hist) % 2 == 1
@@ -849,6 +863,7 @@ def computer_turn(
     max_movetime = (movetime / 1000.0) if movetime else 0
 
     def do_turn(searcher, hist):
+        _apply_hero_flags(session.heroes)
         sunfish._precision = precision
 
         # 1. Search for best move
@@ -902,6 +917,7 @@ def player_move(
         session.override_fen(fen, moves_history)
 
     def do_move(searcher, hist):
+        _apply_hero_flags(session.heroes)
         sunfish._precision = 0.0
 
         # Validate move legality

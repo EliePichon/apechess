@@ -225,7 +225,8 @@ static int value_internal(
     const char *board,
     int ep,
     int kp,
-    int mi, int mj, char prom
+    int mi, int mj, char prom,
+    int parkour_enabled, int laser_enabled
 ) {
     char p = board[mi];
     char q = board[mj];
@@ -271,7 +272,7 @@ static int value_internal(
     }
 
     /* Parkour activation: knight-type capture upgrades all N/C to J */
-    if ((p == 'N' || p == 'C') && IS_LOWER[(unsigned char)q] && q != 'o') {
+    if (parkour_enabled && (p == 'N' || p == 'C') && IS_LOWER[(unsigned char)q] && q != 'o') {
         int ji = PIECE_INDEX[(unsigned char)'J'];
         /* Score upgrading the mover */
         score += PST[ji][mj] - PST[pi][mj];
@@ -286,7 +287,7 @@ static int value_internal(
     }
 
     /* Laser Bishop activation: bishop-family capture upgrades in two phases */
-    if (IS_BISHOP_FAMILY[(unsigned char)p] && IS_LOWER[(unsigned char)q] && q != 'o') {
+    if (laser_enabled && IS_BISHOP_FAMILY[(unsigned char)p] && IS_LOWER[(unsigned char)q] && q != 'o') {
         int is_phase2 = (p == 'G');
         if (!is_phase2) {
             int si;
@@ -428,12 +429,14 @@ static PyObject *py_value(PyObject *self, PyObject *args) {
     int ep, kp, mi, mj;
     const char *prom_str;
     Py_ssize_t prom_len;
+    int parkour_enabled, laser_enabled;
 
-    if (!PyArg_ParseTuple(args, "s#iiiis#",
+    if (!PyArg_ParseTuple(args, "s#iiiis#pp",
                           &board, &board_len,
                           &ep, &kp,
                           &mi, &mj,
-                          &prom_str, &prom_len)) {
+                          &prom_str, &prom_len,
+                          &parkour_enabled, &laser_enabled)) {
         return NULL;
     }
 
@@ -445,7 +448,8 @@ static PyObject *py_value(PyObject *self, PyObject *args) {
     }
 
     char prom = (prom_len > 0) ? prom_str[0] : '\0';
-    int score = value_internal(board, ep, kp, mi, mj, prom);
+    int score = value_internal(board, ep, kp, mi, mj, prom,
+                               parkour_enabled, laser_enabled);
 
     return PyLong_FromLong(score);
 }
@@ -462,11 +466,13 @@ static PyObject *py_score_and_sort_moves(PyObject *self, PyObject *args) {
     Py_ssize_t board_len;
     PyObject *wc_tuple, *bc_tuple;
     int ep, kp;
+    int parkour_enabled, laser_enabled;
 
-    if (!PyArg_ParseTuple(args, "s#OOii",
+    if (!PyArg_ParseTuple(args, "s#OOiipp",
                           &board, &board_len,
                           &wc_tuple, &bc_tuple,
-                          &ep, &kp)) {
+                          &ep, &kp,
+                          &parkour_enabled, &laser_enabled)) {
         return NULL;
     }
 
@@ -494,7 +500,8 @@ static PyObject *py_score_and_sort_moves(PyObject *self, PyObject *args) {
     int k;
     for (k = 0; k < count; k++) {
         scored[k].score = value_internal(board, ep, kp,
-                                         moves[k].i, moves[k].j, moves[k].prom);
+                                         moves[k].i, moves[k].j, moves[k].prom,
+                                         parkour_enabled, laser_enabled);
         scored[k].idx = k;
         scored[k].move = moves[k];
     }
@@ -662,14 +669,16 @@ static PyObject *py_move_and_rotate(PyObject *self, PyObject *args) {
     int ep, kp, mi, mj;
     const char *prom_str;
     Py_ssize_t prom_len;
+    int parkour_enabled, laser_enabled;
 
-    if (!PyArg_ParseTuple(args, "s#iOOiiiis#",
+    if (!PyArg_ParseTuple(args, "s#iOOiiiis#pp",
                           &board, &board_len,
                           &score,
                           &wc_tuple, &bc_tuple,
                           &ep, &kp,
                           &mi, &mj,
-                          &prom_str, &prom_len)) {
+                          &prom_str, &prom_len,
+                          &parkour_enabled, &laser_enabled)) {
         return NULL;
     }
 
@@ -689,7 +698,8 @@ static PyObject *py_move_and_rotate(PyObject *self, PyObject *args) {
     char prom = (prom_len > 0) ? prom_str[0] : '\0';
 
     /* Compute new score: score + value(move) */
-    int new_score = score + value_internal(board, ep, kp, mi, mj, prom);
+    int new_score = score + value_internal(board, ep, kp, mi, mj, prom,
+                                           parkour_enabled, laser_enabled);
 
     /* Work on a mutable copy */
     char buf[BOARD_SIZE];
@@ -736,7 +746,7 @@ static PyObject *py_move_and_rotate(PyObject *self, PyObject *args) {
     }
 
     /* Parkour activation: knight-type capture upgrades all N/C to J */
-    if ((p == 'N' || p == 'C') && IS_LOWER[(unsigned char)board[mj]] && board[mj] != 'o') {
+    if (parkour_enabled && (p == 'N' || p == 'C') && IS_LOWER[(unsigned char)board[mj]] && board[mj] != 'o') {
         /* Upgrade the moved piece (already at mj in buf) */
         buf[mj] = 'J';
         /* Upgrade all remaining N and C on the board */
@@ -749,7 +759,7 @@ static PyObject *py_move_and_rotate(PyObject *self, PyObject *args) {
     }
 
     /* Laser Bishop activation: bishop-family capture upgrades in two phases */
-    if (IS_BISHOP_FAMILY[(unsigned char)p] && IS_LOWER[(unsigned char)board[mj]] && board[mj] != 'o') {
+    if (laser_enabled && IS_BISHOP_FAMILY[(unsigned char)p] && IS_LOWER[(unsigned char)board[mj]] && board[mj] != 'o') {
         int is_phase2 = (p == 'G');
         if (!is_phase2) {
             int si;

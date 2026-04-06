@@ -597,6 +597,8 @@ PROMOTION_PIECES = {"A": "CDTX", "P": "NBRQ"}
 
 # Module-level precision for randomized play (set by engine.py before search)
 _precision = 0.0
+_parkour_enabled = True
+_laser_enabled = True
 
 
 def _put(board, i, p):
@@ -779,7 +781,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 board = _put(board, j + S, ".")
         # Parkour activation: knight-type capture upgrades all N and C to J
         # (score adjustment already handled by value() which is called above)
-        if p in ("N", "C") and q.islower() and q != "o":
+        if _parkour_enabled and p in ("N", "C") and q.islower() and q != "o":
             # Upgrade the moved piece (already at j)
             board = _put(board, j, "J")
             # Upgrade all remaining N and C on the board
@@ -787,7 +789,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 if board[sq] in ("N", "C"):
                     board = _put(board, sq, "J")
         # Laser Bishop activation: bishop-family capture upgrades in two phases
-        if p in ("B", "D", "G") and q.islower() and q != "o":
+        if _laser_enabled and p in ("B", "D", "G") and q.islower() and q != "o":
             has_g = "G" in board
             if p == "G" or has_g:
                 # Phase 2: all G/B/D -> L (Laser Bishop)
@@ -828,7 +830,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 score += pst[p][119 - (j + S)]
 
         # Parkour activation bonus: knight-type capture upgrades all N/C to J
-        if p in ("N", "C") and q.islower() and q != "o":
+        if _parkour_enabled and p in ("N", "C") and q.islower() and q != "o":
             # Score upgrading the mover
             score += pst["J"][j] - pst[p][j]
             # Score upgrading all bystander N and C (excluding the mover at i)
@@ -837,7 +839,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     score += pst["J"][sq] - pst[self.board[sq]][sq]
 
         # Laser Bishop activation bonus: bishop-family capture upgrades in two phases
-        if p in ("B", "D", "G") and q.islower() and q != "o":
+        if _laser_enabled and p in ("B", "D", "G") and q.islower() and q != "o":
             has_g = "G" in self.board
             if p == "G" or has_g:
                 # Phase 2: all G/B/D -> L — score the upgrade
@@ -1112,14 +1114,16 @@ if os.environ.get("SUNFISH_NO_C") != "1":
             return _sunfish_core.gen_moves(self.board, self.wc, self.bc, self.ep, self.kp)
 
         def _c_value(self, move):
-            score = _sunfish_core.value(self.board, self.ep, self.kp, move[0], move[1], move[2])
+            score = _sunfish_core.value(self.board, self.ep, self.kp, move[0], move[1], move[2],
+                                        _parkour_enabled, _laser_enabled)
             if _precision > 0.0:
                 factor = random.uniform(1 - _precision, 1 + _precision)
                 score = int(score * factor)
             return score
 
         def _c_score_and_sort(self):
-            return _sunfish_core.score_and_sort_moves(self.board, self.wc, self.bc, self.ep, self.kp)
+            return _sunfish_core.score_and_sort_moves(self.board, self.wc, self.bc, self.ep, self.kp,
+                                                      _parkour_enabled, _laser_enabled)
 
         _py_rotate = Position.rotate
         _py_move = Position.move
@@ -1131,7 +1135,8 @@ if os.environ.get("SUNFISH_NO_C") != "1":
         def _c_move(self, move):
             return Position(*_sunfish_core.move_and_rotate(
                 self.board, self.score, self.wc, self.bc, self.ep, self.kp,
-                move[0], move[1], move[2]))
+                move[0], move[1], move[2],
+                _parkour_enabled, _laser_enabled))
 
         Position.gen_moves = _c_gen_moves
         Position.value = _c_value

@@ -27,6 +27,18 @@ def validate_fen(fen):
     return None
 
 
+def validate_heroes(heroes):
+    """Return a 400 error response if heroes dict is invalid, or None if OK."""
+    if not isinstance(heroes, dict):
+        return jsonify({"error": "heroes must be an object"}), 400
+    for side, hero in heroes.items():
+        if side not in ("white", "black"):
+            return jsonify({"error": f"Invalid hero side: {side}"}), 400
+        if hero is not None and hero not in engine.VALID_HEROES:
+            return jsonify({"error": f"Invalid hero: {hero}. Valid heroes: {sorted(engine.VALID_HEROES)}"}), 400
+    return None
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
@@ -94,6 +106,7 @@ def bestmove_endpoint():
     ignore_squares = data.get("ignore_squares", [])
     moves_history = data.get("moves", "").lower()
     clutchness = data.get("clutchness", False)
+    heroes = data.get("heroes")
 
     # Match default depth logic from original server
     if not movetime and not maxdepth:
@@ -112,6 +125,7 @@ def bestmove_endpoint():
             ignore_squares=ignore_squares,
             session_id=session_id,
             clutchness=clutchness,
+            heroes=heroes,
         )
         return jsonify(result)
     except EngineError:
@@ -156,14 +170,20 @@ def new_game_endpoint():
     """
     data = request.get_json() or {}
     fen = data.get("fen")
+    heroes = data.get("heroes", {})
 
     if fen:
         err = validate_fen(fen)
         if err:
             return err
 
+    if heroes:
+        err = validate_heroes(heroes)
+        if err:
+            return err
+
     try:
-        session_id = engine.create_session(fen)
+        session_id = engine.create_session(fen, heroes=heroes)
         return jsonify({"session_id": session_id})
     except EngineError:
         raise
@@ -318,6 +338,7 @@ def eval_moves_endpoint():
     maxdepth = data.get("maxdepth", 8)
     movetime = data.get("movetime", None)
     moves_history = data.get("moves", "").lower()
+    heroes = data.get("heroes")
 
     try:
         result = engine.get_evaluated_moves(
@@ -326,6 +347,7 @@ def eval_moves_endpoint():
             maxdepth=maxdepth,
             movetime=movetime,
             session_id=session_id,
+            heroes=heroes,
         )
         return jsonify(result)
     except EngineError:

@@ -195,7 +195,8 @@ def compare_value(fen, label=""):
 
     for move in moves:
         pv = py_value(pos, move)
-        cv = _sunfish_core.value(pos.board, pos.ep, pos.kp, move[0], move[1], move[2])
+        cv = _sunfish_core.value(pos.board, pos.ep, pos.kp, move[0], move[1], move[2],
+                                sunfish._parkour_enabled, sunfish._laser_enabled)
         if pv != cv:
             return False, f"move={move}, Python={pv}, C={cv}"
     return True, f"{len(moves)} moves"
@@ -210,7 +211,8 @@ def compare_score_and_sort(fen, label=""):
 
     moves = list(py_gen(pos))
     py_scored = sorted(((py_val(pos, m), m) for m in moves), reverse=True)
-    c_scored = _sunfish_core.score_and_sort_moves(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)
+    c_scored = _sunfish_core.score_and_sort_moves(pos.board, pos.wc, pos.bc, pos.ep, pos.kp,
+                                                  sunfish._parkour_enabled, sunfish._laser_enabled)
 
     if py_scored == c_scored:
         return True, f"{len(moves)} moves"
@@ -298,7 +300,8 @@ def compare_move(fen, label=""):
         py_moved = py_move_fn(pos, move)
         c_result = _sunfish_core.move_and_rotate(
             pos.board, pos.score, pos.wc, pos.bc, pos.ep, pos.kp,
-            move[0], move[1], move[2])
+            move[0], move[1], move[2],
+            sunfish._parkour_enabled, sunfish._laser_enabled)
         c_moved = sunfish.Position(*c_result)
         if py_moved != c_moved:
             detail = f"move={move}"
