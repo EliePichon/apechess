@@ -277,7 +277,7 @@ python server.py
 
 **Hot-reload**: Code changes to `server.py`, `engine.py`, `sunfish.py`, and `tools/` are picked up automatically via volume mounts + Flask debug mode. No restart needed.
 
-**When to rebuild Docker**: Run `make down && make up` after changing `requirements.txt`, `Dockerfile.local`, or `csrc/` files.
+**When to rebuild Docker**: Run `make rebuild` after changing `requirements.txt`, `Dockerfile.local`, or `csrc/` files. This forces a full image rebuild (unlike `make up` which reuses the cached image).
 
 **When to rebuild C extension locally**: Run `pip install -e .` after any change to `csrc/` files. Not needed for Python-only changes.
 

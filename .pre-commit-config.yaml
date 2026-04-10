@@ -6,6 +6,12 @@ repos:
         args: [--fix]
   - repo: local
     hooks:
+      - id: csrc-rebuild-reminder
+        name: C extension rebuild reminder
+        entry: bash -c 'echo "⚠  csrc/ files changed — run \"make rebuild\" to update the Docker C extension" && exit 0'
+        language: system
+        pass_filenames: false
+        files: ^csrc/
       - id: unit-tests
         name: unit tests
         entry: python tests/test_search_best_moves.py

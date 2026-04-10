@@ -1,10 +1,11 @@
-.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-clutchness test-perf test-session-perf test-depth test-movetime help up down logs profile profile-top profile-record lint format format-check setup-hooks
+.PHONY: test test-top-n test-ignore test-rock-landing test-session test-dream test-clutchness test-perf test-session-perf test-depth test-movetime help up down rebuild logs profile profile-top profile-record lint format format-check setup-hooks
 
 # Default target
 help:
 	@echo "Sunfish Chess Engine - Available Commands:"
 	@echo ""
 	@echo "  make up            - Start the dev server in Docker"
+	@echo "  make rebuild       - Rebuild Docker image and restart (use after csrc/ changes)"
 	@echo "  make down          - Stop the dev server"
 	@echo "  make logs          - View server logs"
 	@echo "  make test          - Run all tests (server must be running)"
@@ -35,6 +36,13 @@ help:
 up:
 	docker-compose up -d
 	@echo "Server starting... waiting 3 seconds"
+	@sleep 3
+	@echo "Server ready at http://localhost:5500"
+
+# Rebuild Docker image and restart (required after csrc/ changes)
+rebuild:
+	docker-compose up -d --build
+	@echo "Server rebuilt and starting... waiting 3 seconds"
 	@sleep 3
 	@echo "Server ready at http://localhost:5500"
 
