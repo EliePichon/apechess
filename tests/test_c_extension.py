@@ -560,6 +560,131 @@ def test_laser_score_and_sort_phase2():
     assert ok, f"Laser score_and_sort: {detail}"
 
 
+# --- Rock-chain early promotion tests ---
+
+
+def test_rock_chain_promotion_behavior():
+    """Verify that rock-chain promotion generates correct promotion moves."""
+    # White pawn on d7 (index 24), rock on d8 (index 14).
+    # Pawn can't advance (rock blocks, pawn is not powered).
+    # But if pawn captures diagonally onto e8 (no rock there)... e8 is rank 8, normal promo.
+    # For rock chain test: need pawn to NOT reach rank 8 but still promote.
+    # Put enemy on e7 so pawn can capture c6→d7 with rock on d8.
+    # Actually simpler: pawn on d7, rock on d8, enemy on c8 or e8.
+    # Pawn captures onto c8/e8 = rank 8 = normal promo. That's not testing the chain.
+    # Real test: pawn on d6, rocks on d7+d8. Pawn can advance to d7? No, rock blocks.
+    # So we need diagonal capture onto a chain square.
+    # Pawn on c6, enemy on d7 (which is below rock on d8). Chain: d8=rock → d7 is promo sq.
+    fen = "3Ok3/3p4/2P5/8/8/8/8/4K3 w - - 0 1"
+    parts = fen.split()
+    pos = uci.from_fen(*parts)
+    moves = list(py_gen_moves(pos))
+
+    # c6=23+10*4+3=? Let's use sunfish.parse
+    src = sunfish.parse("c6")
+    dst = sunfish.parse("d7")
+
+    # Pawn captures c6→d7 should generate promotion moves (d7 is below rock on d8)
+    promo_moves = [(i, j, prom) for (i, j, prom) in moves if i == src and j == dst]
+    assert len(promo_moves) == 4, f"Expected 4 promotion moves for c6→d7, got {len(promo_moves)}: {promo_moves}"
+    promo_chars = sorted([m[2] for m in promo_moves])
+    assert promo_chars == ["B", "N", "Q", "R"], f"Expected N/B/R/Q promotions, got {promo_chars}"
+
+    # Also verify: pawn on e6, rock on e7, NO rock on e8 → no early promo on e6
+    fen2 = "4k3/4O3/4P3/8/8/8/8/4K3 w - - 0 1"
+    pos2 = uci.from_fen(*fen2.split())
+    moves2 = list(py_gen_moves(pos2))
+    src2 = sunfish.parse("e6")
+    # Pawn at e6 should have NO promotion moves (broken chain)
+    promo_moves2 = [(i, j, prom) for (i, j, prom) in moves2 if i == src2 and prom != ""]
+    assert len(promo_moves2) == 0, f"Expected no promotion for broken chain, got {promo_moves2}"
+
+
+def test_rock_chain_single_rock_gen_moves():
+    """Pawn captures diagonally into rock-chain promotion square (single rock)."""
+    # Pawn on c7, rock on d8, enemy on d7. Pawn captures c7→d7 (below rock on d8 = promo sq).
+    # Also: pawn on c7 can capture onto b8 (rank 8, normal promo) if enemy there.
+    ok, detail = compare_gen_moves("3Ok3/2Pp4/8/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Rock chain single rock gen_moves: {detail}"
+
+
+def test_rock_chain_single_rock_value():
+    """Value parity for pawn promoting via rock chain."""
+    ok, detail = compare_value("3Ok3/2Pp4/8/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Rock chain single rock value: {detail}"
+
+
+def test_rock_chain_single_rock_move():
+    """Move parity for pawn promoting via rock chain."""
+    ok, detail = compare_move("3Ok3/2Pp4/8/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Rock chain single rock move: {detail}"
+
+
+def test_rock_chain_double_gen_moves():
+    """Pawn captures diagonally into rock-chain square (chain of 2 rocks)."""
+    # Pawn on c6, rocks on d8+d7, enemy on d6... no, same rank.
+    # Pawn on c6, rocks on c8+c7 (forward blocked), enemy on d7 (diag capture).
+    # d7: walk north → d8. Is d8 a rock? Need one there. Add rock on d8.
+    ok, detail = compare_gen_moves("2OOk3/2Op4/2P5/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Rock chain double gen_moves: {detail}"
+
+
+def test_rock_chain_double_value():
+    ok, detail = compare_value("2OOk3/2Op4/2P5/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Rock chain double value: {detail}"
+
+
+def test_rock_chain_double_move():
+    ok, detail = compare_move("2OOk3/2Op4/2P5/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Rock chain double move: {detail}"
+
+
+def test_rock_chain_broken_no_promo():
+    """Broken chain: rock on rank 7 but NOT rank 8 — no early promotion."""
+    # Pawn on e6, rock on e7, empty e8. Pawn should NOT promote on e6.
+    ok, detail = compare_gen_moves("4k3/4O3/4P3/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Broken chain gen_moves: {detail}"
+
+
+def test_rock_chain_diagonal_capture_promo():
+    """Pawn captures diagonally into a rock-chain promotion square."""
+    # White pawn on c7, rock on d8, enemy on d7... no, d7 is same rank.
+    # Pawn on c7, enemy on d7? No, pawn captures diagonally forward: c7 captures d8.
+    # But d8 has a rock... pawn is not powered so can't land on rock.
+    # Pawn on c6, rock on d8+d7, enemy piece on c7 or e7? No, we need diagonal to a promo sq.
+    # Pawn on c6 with rocks on c8+c7: forward is blocked. Diagonal: d7 with an enemy there.
+    # Is d7 a promo square? Check: d8 has rock? Need to set that up.
+    # FEN: rock on d8, rock on c8+c7. Enemy on d7. Pawn on c6.
+    # Pawn captures c6->d7. Is d7 a promo sq? Walk north: d8 = rock? Yes → promo!
+    ok, detail = compare_gen_moves("2OOk3/3p4/2P5/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Diagonal capture rock chain gen_moves: {detail}"
+
+
+def test_rock_chain_powered_pawn():
+    """Powered pawn (A) promotes to C/D/T/X via rock chain."""
+    ok, detail = compare_gen_moves("3Ok3/3A4/8/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Powered pawn rock chain gen_moves: {detail}"
+
+
+def test_rock_chain_powered_pawn_move():
+    ok, detail = compare_move("3Ok3/3A4/8/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Powered pawn rock chain move: {detail}"
+
+
+def test_rock_chain_black_to_move():
+    """Black pawn promotes via rock chain (rotated board)."""
+    # Black pawn on c3, white pawn on d2, rock on d1. After rotation,
+    # black's rank 1 = promotion rank. Pawn captures d2 which is above rock on d1 → promo.
+    ok, detail = compare_gen_moves("4K3/8/8/8/8/2p5/3P4/3Ok3 b - - 0 1")
+    assert ok, f"Black rock chain gen_moves: {detail}"
+
+
+def test_rock_chain_score_and_sort():
+    """score_and_sort parity for rock chain promotion position."""
+    ok, detail = compare_score_and_sort("3Ok3/2Pp4/8/8/8/8/8/4K3 w - - 0 1")
+    assert ok, f"Rock chain score_and_sort: {detail}"
+
+
 if __name__ == "__main__":
     import pytest
 

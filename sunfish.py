@@ -595,6 +595,18 @@ LASER_BISHOPS = frozenset("L")
 BISHOP_FAMILY = frozenset("BDG")
 PROMOTION_PIECES = {"A": "CDTX", "P": "NBRQ"}
 
+def _is_promotion_sq(board, j):
+    if A8 <= j <= H8:
+        return True
+    sq = j + N
+    while sq >= A8:
+        if board[sq] not in ROCKS:
+            return False
+        if A8 <= sq <= H8:
+            return True
+        sq += N
+    return False
+
 # Module-level precision for randomized play (set by engine.py before search)
 _precision = 0.0
 _parkour_enabled = True
@@ -723,8 +735,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                             # and j != self.ep and abs(j - self.kp) >= 2
                         ):
                             break
-                        # If we move to the last row, we can be anything
-                        if A8 <= j <= H8:
+                        # If we move to a promotion square (last row or rock chain to last row)
+                        if _is_promotion_sq(self.board, j):
                             proms = PROMOTION_PIECES[p]
                             for prom in proms:
                                 yield (i, j, prom)
@@ -773,7 +785,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 board = _put(board, kp, "R")
         # Pawn promotion, double move and en passant capture
         if p in PAWNS:
-            if A8 <= j <= H8:
+            if _is_promotion_sq(board, j):
                 board = _put(board, j, prom)
             if j - i == 2 * N:
                 ep = i + N
@@ -824,7 +836,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             score -= pst["R"][A1 if j < i else H1]
         # Special pawn stuff
         if p in PAWNS:
-            if A8 <= j <= H8:
+            if _is_promotion_sq(self.board, j):
                 score += pst[prom][j] - pst[p][j]
             if j == self.ep:
                 score += pst[p][119 - (j + S)]

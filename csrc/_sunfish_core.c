@@ -23,6 +23,19 @@ typedef struct {
     CMove move;
 } ScoredMove;
 
+/* Check if square j is a promotion square: rank 8, or connected to rank 8
+ * by a continuous chain of rocks in the same file. */
+static inline int is_promotion_sq(const char *board, int j) {
+    if (j >= A8 && j <= H8) return 1;
+    int sq = j + DIR_N;
+    while (sq >= A8) {
+        if (!IS_ROCK[(unsigned char)board[sq]]) return 0;
+        if (sq >= A8 && sq <= H8) return 1;
+        sq += DIR_N;
+    }
+    return 0;
+}
+
 /*
  * gen_moves_internal: C implementation of Position.gen_moves()
  *
@@ -161,8 +174,8 @@ static int gen_moves_internal(
                         j != kp && j != kp - 1 && j != kp + 1) {
                         break;
                     }
-                    /* Promotion: if we reach the last rank */
-                    if (j >= A8 && j <= H8) {
+                    /* Promotion: if we reach a promotion square (last rank or rock chain) */
+                    if (is_promotion_sq(board, j)) {
                         const char *proms = (p == 'A') ? PROM_A : PROM_P;
                         int pi;
                         for (pi = 0; pi < PROM_COUNT && count < max_moves; pi++) {
@@ -262,7 +275,7 @@ static int value_internal(
 
     /* Special pawn stuff */
     if (IS_PAWN[(unsigned char)p]) {
-        if (mj >= A8 && mj <= H8) {
+        if (is_promotion_sq(board, mj)) {
             int prom_idx = PIECE_INDEX[(unsigned char)prom];
             score += PST[prom_idx][mj] - PST[pi][mj];
         }
@@ -734,7 +747,7 @@ static PyObject *py_move_and_rotate(PyObject *self, PyObject *args) {
 
     /* Pawn promotion, double move and en passant capture */
     if (IS_PAWN[(unsigned char)p]) {
-        if (mj >= A8 && mj <= H8) {
+        if (is_promotion_sq(board, mj)) {
             buf[mj] = prom;
         }
         if (mj - mi == 2 * DIR_N) {

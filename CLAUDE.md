@@ -218,6 +218,7 @@ Heroes gate special activation mechanics. Without a hero, captures happen normal
 - **Moves are plain tuples** `(i, j, prom)`, not namedtuples. Access via indexing (`move[0]`, `move[1]`, `move[2]`) or unpacking (`i, j, prom = move`). Do NOT use `.i`, `.j`, `.prom` attribute access.
 - Piece values: P=100, N=280, B=320, R=479, Q=929, K=60000, O=0, J=550, G=320, L=950
 - Pawn logic uses `p in "PA"`, king logic uses `p in "KY"` to include powered variants
+- **Rock-chain promotion**: Pawns promote not only on rank 8, but also on any square connected to rank 8 by a continuous vertical chain of rocks. Helper `_is_promotion_sq(board, j)` in `sunfish.py`, `is_promotion_sq()` in C. Used in `gen_moves`, `move`, and `value`.
 - Non-slider stop set: `"PNKACYJ"` (includes Ninja Knight)
 - `engine.py` player_pieces includes `ACDTXYJGL`
 - **Precision** is a module-level variable `sunfish._precision` (set by engine.py before search, default 0.0). Do not set it on the Searcher instance.
