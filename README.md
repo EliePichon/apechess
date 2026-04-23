@@ -11,7 +11,6 @@ Apechess wraps Thomas Ahle's Sunfish engine in a Flask HTTP API with session man
 - **Dream API** — A simplified 3-verb game loop (`/newgame` → `/turn` → `/move`) with optional move grading and look-ahead for puzzle triggers.
 - **C extension** — Hot paths rewritten in C for a **~6.4× speedup** (18K → 117K NPS on an M1 MacBook). Pure-Python fallback if the extension isn't built.
 - **Custom pieces (optional)** — Rocks, Powered Pieces, Ninja Knight, Laser Bishop. Encoded as extra FEN characters — regular chess FENs behave exactly like upstream Sunfish.
-- **Heroes** — Per-game activation flags that gate custom piece mechanics.
 - **Clutchness & grading** — Eval-gap metric and per-move accuracy scoring, useful for puzzles and coaching UIs.
 
 ## Quick start
@@ -85,43 +84,17 @@ Node counts are **invariant across the C and Python paths** — same board itera
 
 ## Custom pieces
 
-All pieces are ASCII letter pairs (uppercase = White, lowercase = Black) designed to survive `swapcase()` rotation cleanly. A standard FEN uses only the first six rows of this table and behaves like any other chess engine.
+Apechess adds a handful of optional piece variants, encoded as extra ASCII letters (uppercase = White, lowercase = Black) that survive `swapcase()` rotation cleanly. A standard FEN uses only the six standard pieces and behaves like any other chess engine.
 
-| Char  | Piece            | Value | Notes                                           |
-|-------|------------------|-------|-------------------------------------------------|
-| P / p | Pawn             | 100   | Standard                                        |
-| N / n | Knight           | 280   | Standard                                        |
-| B / b | Bishop           | 320   | Standard                                        |
-| R / r | Rook             | 479   | Standard                                        |
-| Q / q | Queen            | 929   | Standard                                        |
-| K / k | King             | 60000 | Standard                                        |
-| O / o | **Rock**         | 0     | Neutral, immovable obstacle. Blocks sliders and pawns. Knights jump over it. |
-| A / a | Augmented Pawn   | 100   | Powered — can land on and destroy rocks         |
-| C / c | Cavalry          | 280   | Powered Knight                                  |
-| D / d | Diagonal Bishop  | 320   | Powered Bishop                                  |
-| T / t | Tower            | 479   | Powered Rook                                    |
-| X / x | eXtreme Queen    | 929   | Powered Queen                                   |
-| Y / y | Yonder King      | 60000 | Powered King                                    |
-| J / j | **Ninja Knight** | 550   | Chains knight-hops off rocks (doesn't destroy them) |
-| G / g | Bloodied Bishop  | 320   | Intermediate state for the Laser Bishop activation |
-| L / l | **Laser Bishop** | 950   | Slides through *all* pieces on diagonals        |
+| Char          | Piece            | Notes                                                   |
+|---------------|------------------|---------------------------------------------------------|
+| P N B R Q K   | Standard pieces  | —                                                       |
+| O             | Rock             | Neutral, immovable obstacle                             |
+| A C D T X Y   | Powered pieces   | Variants of P/N/B/R/Q/K that can destroy rocks          |
+| J             | Ninja Knight     | Chains knight-hops off rocks                            |
+| L             | Laser Bishop     | Slides through all pieces on diagonals                  |
 
-Powered pieces move like their base piece but can land on rocks, destroying them. Sliding powered pieces (T, D, X) stop on the rock they destroy. Ninja Knight and Laser Bishop have their own movement rules — see the dedicated sections in [CLAUDE.md](CLAUDE.md) for the full behavior and implementation notes.
-
-### Heroes
-
-Heroes are per-side activation flags that gate the more exotic mechanics. Without heroes, captures work normally.
-
-| Hero      | Unlocks         | Trigger                                          |
-|-----------|-----------------|--------------------------------------------------|
-| `charles` | Parkour         | A knight capture promotes all your knights to Ninja Knights (`J`) |
-| `steina`  | Laser Bishop    | Two-phase bishop activation: B→G on first capture, G→L on the next |
-
-```bash
-curl -s -X POST http://localhost:5500/newgame \
-  -H 'Content-Type: application/json' \
-  -d '{"heroes": {"white": "charles", "black": "steina"}}'
-```
+See [CLAUDE.md](CLAUDE.md) for full piece behavior, activation rules, and FEN encoding.
 
 ## Architecture
 
@@ -183,7 +156,6 @@ Apechess is a substantial fork. The core search is still Sunfish's MTD-bi; every
 - Flask REST API (`server.py`) + stateful session layer (`engine.py`)
 - C extension for move generation, evaluation, sort, move, rotate
 - Custom piece types (Rock, Powered Pieces, Ninja Knight, Laser Bishop)
-- Hero system for per-game mechanic gating
 - Dream API (`/turn`, peek-ahead, move grading)
 - Clutchness metric, `top_n`, `ignore_squares`, `precision` parameters
 - Docker dev environment with hot-reload and profiling
